@@ -39,14 +39,35 @@ session:
     - Preserve conversation.jsonl and tool-calls.jsonl as run records.
     - Do not create a second run-details directory at the repository root.
 
-    Source documents (expected in the pi-nobash repository root):
-    - pi-nobash-product-spec-v1.7.3.md: authoritative scope, requirements, AC1-AC11.
-    - pi-nobash-technical-implementation-spec-v2.3.md: pinned design and test plan.
-    - bash-substitution-assessment-v3.2.1.md: supporting workload evidence.
-    Read these before dispatch. If a source is missing, record BLOCKED in plan.md;
+    Source documents (all under docs/, NOT the repository root):
+    - docs/pi-nobash-product-spec-v1.7.3.md: authoritative scope, requirements, AC1-AC11.
+    - docs/pi-nobash-technical-spec-amendments.md: normative technical amendments
+      A1-A9; overrides the technical spec where they conflict.
+    - docs/pi-nobash-technical-implementation-spec-v2.3.md: pinned design and test plan.
+    - docs/bash-substitution-assessment-v3.2.1.md: supporting workload evidence.
+    Read all four before dispatch. If a source is missing, record BLOCKED in plan.md;
     do not fabricate its contents or assert the corresponding criteria pass.
-    Authority: product spec > technical spec > assessment. The target runtime is
-    earendil-works/pi v1.1.0; check actual runtime behavior with tests.
+    Authority: product spec > technical spec as amended by the amendments doc >
+    assessment. The target runtime is earendil-works/pi v1.1.0; check actual
+    runtime behavior with tests.
+
+    Current repository state (verified 2026-10-09; re-verify before dispatch):
+    - Git repository on branch main, pushed to origin. run-details/ is
+      gitignored, so final.md and plan.md stay local and are not pushed.
+    - The tooling baseline ALREADY EXISTS and passes: package.json,
+      tsconfig.json, .gitignore, tests/. Commands: `npm test` (node:test),
+      `npm run typecheck` (tsc --noEmit), `npm run lint` (biome check .),
+      `npm run fallow`. Use these names; do not invent new scripts.
+    - No build step: Pi loads the .ts extension via jiti. Relative imports use
+      explicit .ts specifiers; tsconfig sets erasableSyntaxOnly.
+    - package.json declares no runtime dependencies; host packages are
+      peerDependencies "*"; Biome/Fallow/TypeScript are devDependencies only.
+      A `files` allowlist (extensions, src, README.md) keeps dev tooling,
+      tests, specs, and .mypi out of an npm tarball; keep it correct when
+      adding runtime files.
+    - No extensions/ or src/ tree exists yet; that is the actual work.
+    - Do NOT overwrite the tooling baseline or revert package.json against the
+      frozen contracts.
 
     Ponytail skill assessment (mandatory for every implementation decision):
     - Before approving a design, implementation approach, refactor, or fix,
@@ -127,12 +148,16 @@ session:
        evidence capture, and finalization. Check list_agents regularly.
 
     Pre-dispatch contract freeze (mandatory before ANY implementation work order):
-    - The three source documents pin WHAT and the Pi interface, but leave
-      internal design open. Independently derive your own list of
-      under-specified decisions by reading the documents; do not assume an
-      external list exists and do not skip this because work looks obvious.
-    - Before dispatching the first work order for an area, freeze every shared
-      decision that area depends on as an explicit contract in plan.md.
+    - plan.md ALREADY contains frozen contracts C1-C6, each with a definition,
+      owner, disposition, goal reconciliation, Ponytail note, and proving test.
+      ADOPT them: read plan.md first, verify each against the source docs, and
+      extend or correct them in place. Do NOT re-derive the same set from
+      scratch and do NOT overwrite or renumber them.
+    - If you find an under-specified decision not covered by C1-C6, freeze it as
+      a new contract (C7, C8, ...) in the same format. Do not skip this because
+      work looks obvious.
+    - Before dispatching the first work order for an area, ensure every shared
+      decision that area depends on is frozen in plan.md.
     - Each frozen item MUST record: name, exact definition, owner peer, the
       fixture/test that proves it, and exactly one disposition:
       CONTRACT (normative, fully defined), TEST-GATED (behavior must be proven
@@ -151,7 +176,7 @@ session:
     - Do NOT dispatch implementation of an area whose shared contract is not
       yet frozen. If a peer reports a missing contract mid-flight, freeze it
       before that peer proceeds.
-    - The minimum contract set to freeze, plus anything else you find:
+    - Already frozen as C1-C6; confirm they still hold and extend if needed:
       (1) build/test tooling: test runner, TS config/loading, and the exact
           commands behind `npm test` and `npm run typecheck` (the spec's
           package.json example defines no scripts);
@@ -167,7 +192,7 @@ session:
           behavior.
 
     Delivery workflow:
-    - Inspect existing repository state and the three inputs first. Do not
+    - Inspect the existing repository state and the four inputs first. Do not
       overwrite already implemented work. Do not assume the repo is empty.
     - Assign independent implementation areas: pi_core owns package/bootstrap,
       Pi integration and status; data_git owns JSON/JSONL and read-only Git;
@@ -248,7 +273,10 @@ agents:
       skeleton/metadata, extension registration, unconditional direct Bash-call
       blocker, native active-tool selection behavior, status command, setup and
       removal behavior, and your owned Pi integration fixtures. Follow the
-      product spec and technical spec exactly. For each owned change, apply
+      product spec, the amendments doc
+      (docs/pi-nobash-technical-spec-amendments.md), and the frozen contracts
+      C1-C6 in .mypi/task-implement-1/run-details/plan.md; the amendments
+      override the technical spec where they conflict. For each owned change, apply
       Ponytail assessment, TDD (RED/GREEN/REFACTOR), scoped Fallow/Biome,
       and bounded `edit` calls. If `edit` hits a token limit, inspect file state
       and switch to a deterministic Bash/Python/Perl edit; verify the diff.
@@ -270,6 +298,10 @@ agents:
       Implement the specified json_query, query_jsonl, shared typed operators,
       safe numeric semantics, streaming/limits, and read-only typed git_status,
       git_diff, git_log, and git_show tools with fixtures for your owned modules.
+      Read the amendments doc (docs/pi-nobash-technical-spec-amendments.md, esp.
+      A4/A5/A6) and the frozen contracts in
+      .mypi/task-implement-1/run-details/plan.md first; they override the
+      technical spec where they conflict.
       Trusted implementation code may use fixed direct executables; the tools
       exposed to the MODEL may not accept arbitrary programs, code, flags, or
       executable entrypoints. Use Ponytail assessment, TDD
@@ -293,7 +325,10 @@ agents:
       Own the developer-named run_validation capability, .pi/pi-nobash.json
       configuration parsing, fixed runner invocation, permitted test targets,
       runner-specific argument adapters, timeouts, cancellation, output bounds,
-      and your owned tests. Reconcile implementation and test design decisions
+      and your owned tests. Read the amendments doc
+      (docs/pi-nobash-technical-spec-amendments.md, esp. A7) and the frozen
+      contract C5 in .mypi/task-implement-1/run-details/plan.md first; they
+      override the technical spec where they conflict. Reconcile implementation and test design decisions
       with the Ponytail skill assessment and report the outcome. Use test-first
       implementation, scoped Fallow/Biome, and bounded edits; on token-limit
       edit errors inspect file state, then use a deterministic script and diff.
@@ -314,8 +349,10 @@ agents:
     max_cost_usd: 0.55
     system_prompt: |
       You are the independent read-only reviewer. Inspect the source and test
-      evidence against product spec v1.7.3, technical spec v2.3, and assessment
-      v3.2.1 (in that authority order). Review scoped completed work when the
+      evidence against product spec v1.7.3, the amendments doc
+      (docs/pi-nobash-technical-spec-amendments.md), technical spec v2.3, and
+      assessment v3.2.1 (in that authority order; the amendments override the
+      technical spec). Review scoped completed work when the
       supervisor requests it. Flag incorrect Pi v1.1.0 assumptions, missing
       tests, generic-execution escape hatches, unjustified optional scope,
       false performance/coverage claims, and conflicting concurrent changes.
@@ -335,7 +372,7 @@ agents:
 validation:
   # The current harness has an unarmed automatic change-detection gate.
   # The supervisor and engineering peers MUST explicitly run and record these.
-  # The implementers must provide these npm scripts as part of package setup.
+  # These npm scripts already exist in package.json and pass; keep them green.
   commands:
     - "npm test"
     - "npm run typecheck"
