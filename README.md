@@ -3,7 +3,9 @@
 Opt-in Pi package for agents that should not have model-facing Bash or any other
 general-purpose execution tool.
 
-`pi-nobash` implements the **Level 5 "no-Bash"** model: the shell is removed from
+An agent does not need to be malicious to cause damage; it just needs to be confident and wrong. A classic failure mode occurs when an agent hallucinates a file path or variable during a cleanup routine, resulting in commands like rm -rf / or wiping an unintended directory because an environment variable evaluated to empty.
+
+The shell is removed from
 the agent's toolset and replaced with a small library of purpose-built tools whose
 implementations define what can happen. The model chooses a specific operation and
 supplies bounded typed parameters; trusted code decides how to perform it. A
@@ -17,8 +19,10 @@ interpreter input.
 
 ## Why
 
+Coding agents run wild, eventually. They **inevitably** output destructive command patterns due to context drift or bad argument ordering. Intercepting shell execution before it hits the underlying OS process protects the developer's local environment and other things the agent has access to.
+
 An agent that hallucinates a command, misreads a path, or picks a destructive flag
-faces unbounded consequences when it holds a shell. `pi-nobash` removes the general
+faces *unbounded consequences* when it holds a shell. `pi-nobash` removes the general
 execution interface rather than trusting the model to avoid it, and supplies
 deliberately narrow alternatives for recurring engineering work.
 
