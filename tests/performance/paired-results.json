@@ -1,0 +1,25 @@
+{
+	"task": "filter status==error; groupBy [service,region]; count; orderBy count desc; limit 10",
+	"task_result": "PASS",
+	"measured_note": "model_turns and token counts were NOT measured (no model invocation headless); single paired run on a 50k-line seeded fixture; no speedup percentage claimed; historical 411-vs-414 discrepancy unreconciled",
+	"legacy_bash_arm": {
+		"runner": "node -e fixed program via execFile",
+		"arm": "legacy_bash_script",
+		"duration_ms": 93.3,
+		"input_bytes": 4842455,
+		"output_bytes": 463,
+		"rows_scanned": 50000,
+		"rows_returned": 10,
+		"truncated": true
+	},
+	"pi_nobash_arm": {
+		"runner": "runQueryJsonl (registered query_jsonl body)",
+		"arm": "pi_nobash_query_jsonl",
+		"duration_ms": 180.3,
+		"input_bytes": 4842455,
+		"output_bytes": 463,
+		"rows_scanned": 50000,
+		"rows_returned": 10,
+		"truncated": true
+	}
+}
