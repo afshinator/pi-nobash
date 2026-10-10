@@ -29,6 +29,8 @@ export const runValidationTool: ToolDefinition<typeof parameters, unknown> = {
 	label: "Run validation",
 	description:
 		"Run a named, developer-configured validation check. Targets are optional and only allowed for checks configured with file targets.",
+	promptSnippet:
+		"Run a named developer-configured validation check (tests, linters).",
 	parameters,
 	outputSchema: checkResultSchema,
 	exposure: "direct",
@@ -72,6 +74,12 @@ export function registerValidationTools(
 			cwd: normalizeCwd(ctx.cwd),
 			snapshot: readSnapshot(ctx.cwd),
 		});
+	});
+	// N3: session_shutdown is a verified Pi 1.1.0 hook (types.d.ts
+	// ExtensionAPI.on("session_shutdown"), emitted by
+	// AgentSessionRuntime.teardownCurrent/dispose); release the snapshot there.
+	pi.on("session_shutdown", (_event, ctx) => {
+		sessions.delete(ctx.sessionManager.getSessionId());
 	});
 	pi.registerTool({
 		...runValidationTool,
