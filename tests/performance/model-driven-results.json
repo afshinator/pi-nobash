@@ -1,0 +1,66 @@
+{
+	"what": "Real model-driven paired whole-task comparison (DoD criterion 8, WO-3). Same model, same whole task; arm A uses the Bash tool, arm B uses pi-nobash query_jsonl/json_query. n=2 per arm. No speedup is claimed; duration is dominated by model latency and the two arms are within run-to-run noise.",
+	"date": "2026-10-09",
+	"model": "deepseek/deepseek-v4-flash (pi 1.1.0, --mode json, thinking low)",
+	"provider_check": "pi auth check --json --provider deepseek -> {\"status\":\"ready\",\"provider\":\"deepseek\",\"authType\":\"api_key\"} exit=0",
+	"task_prompt": "Analyze the file workload.jsonl in the current directory. Each line is one JSON object with fields id, ts, service, region, status, latency_ms. Task: filter the records where status == \"error\", group them by service and region, count the records per group, sort the groups by count descending, and take the top 10. Your final reply must be ONLY a JSON array of the top 10 groups as objects {\"service\": ..., \"region\": ..., \"count\": ...}, highest count first. No other text.",
+	"fixture": "workload.jsonl, 5000 seeded records (LCG seed 0x5eed), ~540 bytes/record",
+	"ground_truth": "computed deterministically with node (filter/group/count/sort desc/top 10); stored as ground-truth.json in the run workspace",
+	"arm_a_commands": [
+		"cd /tmp/wt-bench && pi -p --mode json --no-session -nc -ns -np --thinking low --provider deepseek --model deepseek/deepseek-v4-flash -t 'read,bash' \"$TASK\" > armA.json"
+	],
+	"arm_b_commands": [
+		"cd /tmp/wt-bench && pi -p --mode json --no-session -nc -ns -np --thinking low --provider deepseek --model deepseek/deepseek-v4-flash -e /Users/afshin/Documents/dev/pi-nobash/extensions/pi-nobash.ts -t 'read,query_jsonl,json_query' \"$TASK\" > armB.json"
+	],
+	"extension_load_verification": "Arm B extension load verified three ways before depending on it: (1) a probe extension loaded via -e executed a registered tool end-to-end (tool_execution_start/tool_execution_end events); (2) with pi-nobash loaded, the model listed its tools as 'read, query_jsonl'; (3) arm B transcripts contain actual query_jsonl tool calls. Note: agent_end.toolsAdded does NOT list extension tools (empty even for a working probe extension), so it is not a valid load indicator.",
+	"runs": [
+		{
+			"pair": 1,
+			"order": "A then B",
+			"arm_a": {
+				"exit_code": 0,
+				"duration_ms": 6077,
+				"turns": 5,
+				"tool_calls": ["bash", "bash", "bash", "bash"],
+				"tokens": { "input": 1088, "output": 598, "cacheRead": 10496 },
+				"correct": true
+			},
+			"arm_b": {
+				"exit_code": 0,
+				"duration_ms": 6710,
+				"turns": 4,
+				"tool_calls": ["query_jsonl", "query_jsonl", "read"],
+				"tokens": { "input": 3947, "output": 986, "cacheRead": 12800 },
+				"correct": true
+			}
+		},
+		{
+			"pair": 2,
+			"order": "B then A (order swapped to cancel cache/order effects)",
+			"arm_a": {
+				"exit_code": 0,
+				"duration_ms": 6531,
+				"turns": 4,
+				"tool_calls": ["bash", "bash", "bash"],
+				"tokens": { "input": 1124, "output": 811, "cacheRead": 9088 },
+				"correct": true
+			},
+			"arm_b": {
+				"exit_code": 0,
+				"duration_ms": 6981,
+				"turns": 4,
+				"tool_calls": ["query_jsonl", "query_jsonl", "read"],
+				"tokens": { "input": 921, "output": 999, "cacheRead": 16000 },
+				"correct": true
+			}
+		}
+	],
+	"correctness_criterion": "final reply parses as a JSON array of exactly 10 rows, set-equal to the ground-truth rows (service, region, count), with counts non-increasing; the task specified no tiebreaker for equal counts, so ordering among ties is not scored",
+	"summary": "Both arms produced correct results in all 4 runs. Turns: A 5/4, B 4/4. Wall time A 6077/6531 ms, B 6710/6981 ms; the difference is within model-latency noise. No speedup or slowdown is claimed. Arm B tool surface verified restricted: no bash tool available (allowlist) and the pi-nobash bash blocker was active via the loaded extension.",
+	"caveats": [
+		"n=2 per arm; single fixture size (5000 lines); single model (deepseek-v4-flash at thinking low).",
+		"Actual provider cost per run was ~$0.005-$0.02 (measured via the usage events), not the ~$0.001 estimate.",
+		"Token totals are per-call sums from the --mode json usage events; cacheRead dominates and varies with call count.",
+		"The deterministic paired fixture (paired.test.ts / paired-results.json) remains the repeatable check; this file records the one-off real-model evidence and is not asserted by any test."
+	]
+}
