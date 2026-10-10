@@ -15,6 +15,8 @@ export function registerJsonTools(pi: ExtensionAPI): void {
 		label: "JSON query",
 		description:
 			"Read and query one JSON document using a typed operator set (filter, project, aggregate, order, limit). No expression or code input.",
+		promptSnippet:
+			"Query one JSON file with bounded filter/project/aggregate/order/limit operators.",
 		parameters: JsonQueryInputSchema,
 		outputSchema: JsonQueryOutputSchema,
 		exposure: "direct",
@@ -29,6 +31,8 @@ export function registerJsonTools(pi: ExtensionAPI): void {
 		label: "JSONL query",
 		description:
 			"Stream a JSONL file and apply bounded filter/project/group/aggregate/order/limit operations without loading the whole file into context.",
+		promptSnippet:
+			"Stream a JSONL file with bounded filter/group/aggregate/order/limit operations.",
 		parameters: JsonlQueryInputSchema,
 		outputSchema: JsonlQueryOutputSchema,
 		exposure: "direct",
