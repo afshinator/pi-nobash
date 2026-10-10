@@ -42,8 +42,29 @@ function scratch(label: string): string {
 	dirs.push(dir);
 	return dir;
 }
-after(() => {
-	for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+function cleanupDirs(): void {
+	for (const dir of dirs.splice(0))
+		rmSync(dir, { recursive: true, force: true });
+}
+after(cleanupDirs);
+// N4: an after() hook does not run on a crash; remove the scratch dirs (which
+// may hold an auth.json copy) at process exit and on termination signals too.
+process.once("exit", cleanupDirs);
+process.once("SIGINT", () => {
+	cleanupDirs();
+	process.exit(130);
+});
+process.once("SIGTERM", () => {
+	cleanupDirs();
+	process.exit(143);
+});
+process.once("uncaughtException", (error) => {
+	cleanupDirs();
+	throw error;
+});
+process.once("unhandledRejection", (reason) => {
+	cleanupDirs();
+	throw reason;
 });
 
 test("pi install <local-path> then pi remove updates isolated settings.json", async () => {
@@ -79,6 +100,14 @@ test("pi install <local-path> then pi remove updates isolated settings.json", as
 test("--tools allowlist restricts the active tool set in a real pi process", {
 	timeout: 180_000,
 }, async (t) => {
+	// N2: the live provider call is opt-in so the default suite is offline and
+	// credential-free; set PI_NOBASH_LIVE_PROVIDER=1 to run it.
+	if (process.env.PI_NOBASH_LIVE_PROVIDER !== "1") {
+		t.skip(
+			"live provider call is opt-in: set PI_NOBASH_LIVE_PROVIDER=1 (default suite must be offline and credential-free)",
+		);
+		return;
+	}
 	// Skip with a verified reason when no deepseek credentials are available.
 	const agentDir = scratch("agent");
 	const realAuth = path.join(homedir(), ".pi/agent/auth.json");
@@ -165,6 +194,15 @@ test("--tools allowlist restricts the active tool set in a real pi process", {
 		"bash must not be executable under the -t read allowlist",
 	);
 	assert.match(run.stdout, new RegExp(marker));
+
+	// N4: scope the copy to the spawn; the copy must not outlive the run.
+	const copiedAuth = path.join(agentDir, "auth.json");
+	if (existsSync(copiedAuth)) rmSync(copiedAuth);
+	assert.equal(
+		existsSync(copiedAuth),
+		false,
+		"auth.json copy must be gone once the spawned pi run completes",
+	);
 });
 
 /*
@@ -258,4 +296,15 @@ console.log("${C9_MARKER}");`;
 		"the configured check must have spawned a real node process",
 	);
 	session.dispose();
+});
+
+test("N4: the CLI test module registers crash-safe scratch cleanup", () => {
+	assert.ok(
+		process.listenerCount("exit") > 0,
+		"an exit handler must remove scratch dirs (possible auth.json copies)",
+	);
+	assert.ok(process.listenerCount("SIGINT") > 0);
+	assert.ok(process.listenerCount("SIGTERM") > 0);
+	assert.ok(process.listenerCount("uncaughtException") > 0);
+	assert.ok(process.listenerCount("unhandledRejection") > 0);
 });

@@ -167,11 +167,13 @@ function toolCtx(
 function captureRegistered(cwd: string): {
 	execute: Execute;
 	fireSessionStart: (cwd: string, id?: string) => void;
+	fireSessionShutdown: (cwd: string, id?: string) => void;
 } {
 	const tools: Array<{ name: string; execute: Execute }> = [];
-	const sessionStartHandlers: Array<
-		(event: undefined, ctx: { cwd: string }) => void
-	> = [];
+	const handlers: Record<
+		string,
+		Array<(event: undefined, ctx: { cwd: string }) => void>
+	> = {};
 	const pi = {
 		registerTool: (tool: { name: string; execute: Execute }) =>
 			tools.push(tool),
@@ -179,7 +181,9 @@ function captureRegistered(cwd: string): {
 			event: string,
 			handler: (event: undefined, ctx: { cwd: string }) => void,
 		) => {
-			if (event === "session_start") sessionStartHandlers.push(handler);
+			const list = handlers[event] ?? [];
+			list.push(handler);
+			handlers[event] = list;
 			return () => {};
 		},
 	} as unknown as ExtensionAPI;
@@ -189,7 +193,11 @@ function captureRegistered(cwd: string): {
 	return {
 		execute: tool.execute,
 		fireSessionStart: (sessionCwd: string, id = "unit") => {
-			for (const h of sessionStartHandlers)
+			for (const h of handlers.session_start ?? [])
+				h(undefined, toolCtx(sessionCwd, id));
+		},
+		fireSessionShutdown: (sessionCwd: string, id = "unit") => {
+			for (const h of handlers.session_shutdown ?? [])
 				h(undefined, toolCtx(sessionCwd, id));
 		},
 	};
@@ -442,4 +450,50 @@ test("tool: config is read once at activation; a post-activation rewrite does no
 	);
 	assert.equal(reread.isError, true);
 	assert.equal(reread.details.code, "VALIDATION_FAILED");
+});
+
+// N3: a real Pi 1.1.0 lifecycle hook (session_shutdown, emitted by
+// AgentSessionRuntime.teardownCurrent/dispose) must release the session's
+// snapshot: after shutdown, a call for that session id is unbound again.
+test("tool: session_shutdown releases the session's snapshot (N3)", async () => {
+	const noneMode = (exit: number) => ({
+		program: process.execPath,
+		args: ["-e", `process.exit(${exit})`],
+		cwd: ".",
+		timeoutMs: 10_000,
+		targets: { mode: "none" as const },
+	});
+	const wsA = workspaceWithConfig({ ok: noneMode(0) });
+	const wsB = workspaceWithConfig({ ok: noneMode(0) });
+
+	const { execute, fireSessionStart, fireSessionShutdown } =
+		captureRegistered(wsA);
+	fireSessionStart(wsB, "s1");
+	const bound = envelope(
+		await execute(
+			"b1",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsB, "s1"),
+		),
+	);
+	assert.equal(bound.isError, false, "a bound session must run its snapshot");
+
+	fireSessionShutdown(wsB, "s1");
+	const released = envelope(
+		await execute(
+			"b2",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsB, "s1"),
+		),
+	);
+	assert.equal(
+		released.isError,
+		true,
+		"after session_shutdown the snapshot must be released",
+	);
+	assert.equal(released.details.code, "INVALID_ARGUMENT");
 });

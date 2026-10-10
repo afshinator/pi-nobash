@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -179,10 +185,23 @@ test("paired performance: query_jsonl vs fixed legacy script on one deterministi
 			...armB,
 		},
 	};
+	// N1: the tracked paired-results.json is frozen recorded evidence; a run
+	// writes its fresh measurement to the temp fixture dir and asserts the shape
+	// still matches it, instead of rewriting the tracked file.
 	writeFileSync(
-		path.join(process.cwd(), "tests", "performance", "paired-results.json"),
+		path.join(fixtureDir, "paired-results.json"),
 		`${JSON.stringify(paired, null, "\t")}\n`,
 	);
+	const recorded = JSON.parse(
+		readFileSync(
+			path.join(process.cwd(), "tests", "performance", "paired-results.json"),
+			"utf8",
+		),
+	) as PairedRow;
+	assert.equal(paired.task, recorded.task);
+	assert.equal(paired.task_result, recorded.task_result);
+	assert.equal(paired.legacy_bash_arm.runner, recorded.legacy_bash_arm.runner);
+	assert.equal(paired.pi_nobash_arm.runner, recorded.pi_nobash_arm.runner);
 
 	assert.equal(aParsed.results.length, 10);
 	assert.equal(okDetails.returnedRows, 10);

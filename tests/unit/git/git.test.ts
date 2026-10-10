@@ -4,7 +4,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
+import { MAX_GIT_PATHS } from "../../../src/constants.ts";
 import { execGit } from "../../../src/git/exec.ts";
+import {
+	gitDiffTool,
+	gitLogTool,
+	gitShowTool,
+	gitStatusTool,
+} from "../../../src/git/index.ts";
 import { gitDiff, gitLog, gitShow, gitStatus } from "../../../src/git/tools.ts";
 
 const dirs: string[] = [];
@@ -323,4 +330,20 @@ test("git exec: accumulated stdout is bounded and truncation is surfaced", async
 	assert.equal(show.isError, false);
 	const showD = show.details as { truncated: boolean; diff: string };
 	assert.equal(showD.truncated, true, "show must surface truncation");
+});
+
+// N5: one source of truth for the git path cap (spec 9.6): the TypeBox schema
+// is the effective gate for model-supplied paths, so it must equal MAX_GIT_PATHS.
+test("git tool schemas cap paths at MAX_GIT_PATHS = 100 (spec 9.6)", () => {
+	assert.equal(MAX_GIT_PATHS, 100);
+	for (const tool of [gitStatusTool, gitDiffTool, gitLogTool, gitShowTool]) {
+		const paths = (
+			tool.parameters as { properties: { paths: { maxItems?: number } } }
+		).properties.paths;
+		assert.equal(
+			paths.maxItems,
+			MAX_GIT_PATHS,
+			`${tool.name} paths.maxItems must be MAX_GIT_PATHS`,
+		);
+	}
 });
