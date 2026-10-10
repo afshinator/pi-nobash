@@ -65,10 +65,12 @@ session:
       A `files` allowlist (extensions, src, README.md) keeps dev tooling,
       tests, specs, and .mypi out of an npm tarball; keep it correct when
       adding runtime files.
-    - Run 1 (task-implement-1) LEFT A WORKING IMPLEMENTATION on disk, untracked:
-      extensions/pi-nobash.ts, src/**, tests/** (84/84 pass), plus biome.json.
-      There is NO implementation commit. Extend and verify that code; do NOT
-      re-implement or rewrite it from scratch.
+    - Run 1 (task-implement-1) LEFT A WORKING IMPLEMENTATION that is now
+      COMMITTED on main (8 commits through `7388a0c`, pushed to origin):
+      extensions/pi-nobash.ts, src/**, tests/** (84/84 pass), biome.json, and
+      the A10 amendment. Extend and verify that code; do NOT re-implement or
+      rewrite it from scratch. run-details/ is gitignored, so plan.md/final.md
+      stay local and are not in git.
     - Run 1 ended dod:false with 7/11 DoD criteria passing; the four failing
       criteria (2, 5, 6, 8) and their fixes are stated in plan.md "Resume here".
       Run 2's goal is to close them.
@@ -245,8 +247,8 @@ ask:
     Run 2 of the pi-nobash implementation. Run 1 (task-implement-1) already
     built and green-lit the package: the Pi v1.1.0 extension, bash blocker,
     /nobash-status, typed json_query/query_jsonl, read-only Git tools, and
-    named validation, with 84/84 tests passing. That tree is untracked and
-    must be extended and verified, NOT re-implemented. Run 2's goal is to close
+    named validation, with 84/84 tests passing. That tree is committed on main
+    and must be extended and verified, NOT re-implemented. Run 2's goal is to close
     the four failing DoD criteria recorded in plan.md "Resume here":
     (2) real Pi CLI-process coverage for tool selection and package removal;
     (5/6) validation config composition, resolved by amendment A10 / contract
