@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
@@ -136,6 +143,7 @@ test("tool: registerValidationTools registers run_validation via pi.registerTool
 	const registered: string[] = [];
 	const fakePi = {
 		registerTool: (tool: { name: string }) => registered.push(tool.name),
+		on: () => () => {},
 	} as unknown as ExtensionAPI;
 	registerValidationTools(fakePi);
 	assert.deepEqual(registered, ["run_validation"]);
@@ -146,22 +154,53 @@ type Execute = (
 	params: unknown,
 	signal: undefined,
 	onUpdate: undefined,
-	ctx: { cwd: string },
+	ctx: { cwd: string; sessionManager: { getSessionId: () => string } },
 ) => Promise<{ content: unknown; details: unknown; isError?: boolean }>;
 
-function captureRegistered(cwd: string): Execute {
+function toolCtx(
+	cwd: string,
+	id = "unit",
+): { cwd: string; sessionManager: { getSessionId: () => string } } {
+	return { cwd, sessionManager: { getSessionId: () => id } };
+}
+
+function captureRegistered(cwd: string): {
+	execute: Execute;
+	fireSessionStart: (cwd: string, id?: string) => void;
+} {
 	const tools: Array<{ name: string; execute: Execute }> = [];
+	const sessionStartHandlers: Array<
+		(event: undefined, ctx: { cwd: string }) => void
+	> = [];
 	const pi = {
 		registerTool: (tool: { name: string; execute: Execute }) =>
 			tools.push(tool),
+		on: (
+			event: string,
+			handler: (event: undefined, ctx: { cwd: string }) => void,
+		) => {
+			if (event === "session_start") sessionStartHandlers.push(handler);
+			return () => {};
+		},
 	} as unknown as ExtensionAPI;
 	registerValidationTools(pi, cwd);
 	const tool = tools.find((t) => t.name === "run_validation");
 	assert.ok(tool, "run_validation must be registered");
-	return tool.execute;
+	return {
+		execute: tool.execute,
+		fireSessionStart: (sessionCwd: string, id = "unit") => {
+			for (const h of sessionStartHandlers)
+				h(undefined, toolCtx(sessionCwd, id));
+		},
+	};
 }
 
-test("tool: snapshot is keyed to the session ctx.cwd, not the registration cwd", async () => {
+// Supersedes run-1 F7 ("snapshot is keyed to the session ctx.cwd"): A10/C9
+// normatively rejects a ctx.cwd that differs from the activation cwd instead of
+// lazily loading that directory's config. This is a narrowed contract, not a
+// weakened test; the lazy per-cwd load it asserted is the composition route A10
+// closes.
+test("tool: ctx.cwd other than the activation cwd is INVALID_ARGUMENT (C9/A10)", async () => {
 	const noneMode = (exit: number) => ({
 		program: process.execPath,
 		args: ["-e", `process.exit(${exit})`],
@@ -172,32 +211,199 @@ test("tool: snapshot is keyed to the session ctx.cwd, not the registration cwd",
 	const wsA = workspaceWithConfig({ ok: noneMode(0) });
 	const wsB = workspaceWithConfig({ ok: noneMode(3) });
 
-	// Registered against A, but the session context runs in B.
-	const execute = captureRegistered(wsA);
+	// Registered against A, but the session context runs in B: no B config was
+	// loaded at activation, so the call is rejected without reading B's file.
+	const { execute } = captureRegistered(wsA);
 	const inB = envelope(
-		await execute("b1", { check: "ok" }, undefined, undefined, { cwd: wsB }),
+		await execute("b1", { check: "ok" }, undefined, undefined, toolCtx(wsB)),
 	);
-	assert.equal(inB.isError, true, "B's config must be used for a B session");
-	assert.equal(inB.details.code, "VALIDATION_FAILED");
+	assert.equal(inB.isError, true, "a foreign cwd must be rejected");
+	assert.equal(inB.details.code, "INVALID_ARGUMENT");
+	assert.equal(
+		inB.details.message,
+		"no validation config loaded for this workspace",
+	);
 
-	// Editing B after its first use must not change the snapshot for B.
-	writeFileSync(
-		path.join(wsB, ".pi", "pi-nobash.json"),
-		JSON.stringify({ validation: { checks: { ok: noneMode(0) } } }),
-	);
+	// Repeated calls stay rejected; B's config is never read.
 	const inBAgain = envelope(
-		await execute("b2", { check: "ok" }, undefined, undefined, { cwd: wsB }),
+		await execute("b2", { check: "ok" }, undefined, undefined, toolCtx(wsB)),
 	);
-	assert.equal(inBAgain.isError, true, "B's snapshot must persist");
+	assert.equal(inBAgain.details.code, "INVALID_ARGUMENT");
 
-	// A session in A still uses A's snapshot.
+	// A session in the activation cwd still runs A's snapshot.
 	const inA = envelope(
-		await execute("a1", { check: "ok" }, undefined, undefined, { cwd: wsA }),
+		await execute("a1", { check: "ok" }, undefined, undefined, toolCtx(wsA)),
 	);
 	assert.equal(inA.isError, false);
 });
 
-test("tool: trusted config is snapshotted at registration, not re-read per invocation", async () => {
+test("tool: session_start binds the config to the session cwd (C9)", async () => {
+	const noneMode = (exit: number) => ({
+		program: process.execPath,
+		args: ["-e", `process.exit(${exit})`],
+		cwd: ".",
+		timeoutMs: 10_000,
+		targets: { mode: "none" as const },
+	});
+	const wsA = workspaceWithConfig({ ok: noneMode(0) });
+	const wsB = workspaceWithConfig({ ok: noneMode(3) });
+
+	// Registration cwd is A, but the real session starts in B (e.g. SDK or
+	// CLI session cwd differs from the process cwd): the session cwd governs.
+	const { execute, fireSessionStart } = captureRegistered(wsA);
+	fireSessionStart(wsB);
+
+	const inB = envelope(
+		await execute("m1", { check: "ok" }, undefined, undefined, toolCtx(wsB)),
+	);
+	assert.equal(
+		inB.details.code,
+		"VALIDATION_FAILED",
+		"session cwd B must run B's configured check",
+	);
+
+	// A is now foreign to the session.
+	const inA = envelope(
+		await execute("m2", { check: "ok" }, undefined, undefined, toolCtx(wsA)),
+	);
+	assert.equal(inA.details.code, "INVALID_ARGUMENT");
+
+	// A rewrite of B's config after session_start cannot change the running check.
+	writeFileSync(
+		path.join(wsB, ".pi", "pi-nobash.json"),
+		JSON.stringify({ validation: { checks: { ok: noneMode(0) } } }),
+	);
+	const inBAfterEdit = envelope(
+		await execute("m3", { check: "ok" }, undefined, undefined, toolCtx(wsB)),
+	);
+	assert.equal(
+		inBAfterEdit.details.code,
+		"VALIDATION_FAILED",
+		"post-session_start rewrite must not change the invoked check",
+	);
+});
+
+test("tool: same directory via different path forms is accepted; a different directory is still INVALID_ARGUMENT (C9 hardening)", async () => {
+	const noneMode = (exit: number) => ({
+		program: process.execPath,
+		args: ["-e", `process.exit(${exit})`],
+		cwd: ".",
+		timeoutMs: 10_000,
+		targets: { mode: "none" as const },
+	});
+	const ws = workspaceWithConfig({ ok: noneMode(0) });
+	// Same directory under another path form: a symlink next to it.
+	const link = path.join(path.dirname(ws), `${path.basename(ws)}-link`);
+	try {
+		symlinkSync(ws, link, "dir");
+	} catch {
+		// Some filesystems disallow symlinks; use the macOS /var vs /private/var
+		// realpath divergence instead, which the strict compare also rejects.
+	}
+	const otherForm = fsExists(link) ? link : realpathSync(ws);
+	dirs.push(link);
+
+	// Registered with one path form, executed with the other: the SAME directory
+	// must run its configured check, not be rejected.
+	const { execute } = captureRegistered(ws);
+	const viaOtherForm = envelope(
+		await execute(
+			"s1",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(otherForm),
+		),
+	);
+	assert.equal(
+		viaOtherForm.isError,
+		false,
+		`same directory via ${otherForm} must not be INVALID_ARGUMENT`,
+	);
+
+	// Control: a genuinely different directory is still rejected.
+	const wsOther = workspaceWithConfig({});
+	const foreign = envelope(
+		await execute(
+			"s2",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsOther),
+		),
+	);
+	assert.equal(foreign.details.code, "INVALID_ARGUMENT");
+});
+
+test("tool: two sessions from one registration each run their own snapshot (C9 multi-session)", async () => {
+	const noneMode = (exit: number) => ({
+		program: process.execPath,
+		args: ["-e", `process.exit(${exit})`],
+		cwd: ".",
+		timeoutMs: 10_000,
+		targets: { mode: "none" as const },
+	});
+	const wsA = workspaceWithConfig({ ok: noneMode(0) });
+	const wsB = workspaceWithConfig({ ok: noneMode(3) });
+
+	// One registration, two SDK sessions bound to different cwds.
+	const { execute, fireSessionStart } = captureRegistered(wsA);
+	fireSessionStart(wsA, "S1");
+	fireSessionStart(wsB, "S2");
+
+	const s1 = envelope(
+		await execute(
+			"p1",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsA, "S1"),
+		),
+	);
+	assert.equal(s1.isError, false, "S1 must run A's check (exit 0)");
+
+	const s2 = envelope(
+		await execute(
+			"p2",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsB, "S2"),
+		),
+	);
+	assert.equal(
+		s2.details.code,
+		"VALIDATION_FAILED",
+		"S2 must run B's check (exit 3)",
+	);
+
+	// S2's bind must not clobber S1's.
+	const s1Again = envelope(
+		await execute(
+			"p3",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(wsA, "S1"),
+		),
+	);
+	assert.equal(
+		s1Again.isError,
+		false,
+		"S1 must still work after S2's session_start",
+	);
+});
+
+function fsExists(p: string): boolean {
+	try {
+		realpathSync(p);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+test("tool: config is read once at activation; a post-activation rewrite does not change the running checks (C9/A10)", async () => {
 	const noneMode = (exit: number) => ({
 		program: process.execPath,
 		args: ["-e", `process.exit(${exit})`],
@@ -207,7 +413,7 @@ test("tool: trusted config is snapshotted at registration, not re-read per invoc
 	});
 	const ws = workspaceWithConfig({ ok: noneMode(0) });
 
-	const execute = captureRegistered(ws);
+	const { execute } = captureRegistered(ws);
 	// Model-writable file changes after registration: same name, failing program.
 	writeFileSync(
 		path.join(ws, ".pi", "pi-nobash.json"),
@@ -215,7 +421,7 @@ test("tool: trusted config is snapshotted at registration, not re-read per invoc
 	);
 
 	const snapshotted = envelope(
-		await execute("t1", { check: "ok" }, undefined, undefined, { cwd: ws }),
+		await execute("t1", { check: "ok" }, undefined, undefined, toolCtx(ws)),
 	);
 	assert.equal(
 		snapshotted.isError,
@@ -224,11 +430,15 @@ test("tool: trusted config is snapshotted at registration, not re-read per invoc
 	);
 
 	// A fresh registration under the same session picks up the rewritten file.
-	const executeFresh = captureRegistered(ws);
+	const executeFresh = captureRegistered(ws).execute;
 	const reread = envelope(
-		await executeFresh("t2", { check: "ok" }, undefined, undefined, {
-			cwd: ws,
-		}),
+		await executeFresh(
+			"t2",
+			{ check: "ok" },
+			undefined,
+			undefined,
+			toolCtx(ws),
+		),
 	);
 	assert.equal(reread.isError, true);
 	assert.equal(reread.details.code, "VALIDATION_FAILED");
