@@ -38,6 +38,9 @@ Every amendment, and every implementation slice that follows it, must reconcile 
 | A9 | AC6/AC9, reviewer mandate | none (process) | one plan.md; no second spec file | reviewer checks plan.md contracts |
 | A10 | G1/G4, AC7 | none; narrows the surface | delete the per-cwd lazy map; one read, one immutable value | post-activation rewrite + foreign-cwd tests |
 | A11 | G2/G4, AC6/AC7 | none; discovery and metadata only | one-line snippets and hints; declare an already-imported host package | snippet, annotation, and import-declaration tests |
+| A12 | G1/G3, AC2/AC4 | none; withholds capability until selected | no config; rely on Pi native selection | all seven tools assert `defaultActive: false` |
+| A13 | G5, AC10 | none | omit importable-entry fields a consumer never uses | package.json manifest check |
+| A14 | G5 | none | keep the committed, tested path | integration tests load the extension |
 
 No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future amendment that would is rejected here and escalated to a product decision instead.
 
@@ -56,6 +59,9 @@ No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future
 | A9 | Pre-dispatch contract freeze | §22 delivery sequence | PROCESS |
 | A10 | Validation config load semantics (activation-time read) | §8.1, §8.2, §14 | CONTRACT |
 | A11 | Tool-registration completeness (promptSnippet, hints, declared imports) | §3.6, §9.2 | CONTRACT |
+| A12 | Inactive-by-default packaged tools | §3.3, §6.1, §7.2 | CONTRACT |
+| A13 | Package metadata: no main/exports/license/repository | §5.1 | CONTRACT |
+| A14 | Entry path stays ./extensions/pi-nobash.ts | §5 | CONTRACT |
 
 ---
 
@@ -221,6 +227,48 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 
 ---
 
+## A12 — Inactive-by-default packaged tools (CONTRACT)
+
+**Amends:** §3.3 (registration and `defaultActive`), §6.1 (native selection), §7.2 (activation).
+
+**Decision.** Every packaged model-facing tool is registered with `defaultActive: false`. Loading pi-nobash therefore exposes no new tool to any agent until the developer names it in `defaultTools`, `--tools`, or the SDK `tools` array.
+
+**Why.** Product goal G3 requires per-agent choice, and a package that activates tools on install would silently change every agent that loads it, including agents that never opted into those capabilities. This deliberately diverges from Pi's own default for `direct` tools (`defaultActive: true`) and from several ecosystem packages (e.g. `@aslamplr/pi-safe-shell` activates its tools at registration); it is recorded here so the divergence is not mistaken for an oversight. The cost is that installing the package changes nothing for a model on its own; the benefit is that no agent gains a capability it was not configured for.
+
+**Alternatives rejected.** Activating on install with an opt-out: makes the package's presence alone a capability change and violates G3. A package-level profile or enablement list: product spec §6.1 forbids a parallel profile system; Pi's native selection is the mechanism.
+
+**Proof.** All seven tools register `defaultActive: false` and `exposure: "direct"`, asserted for the full set in `tests/integration/phase1.test.ts`; `tests/unit/validation/tool.test.ts` covers `run_validation` directly.
+
+---
+
+## A13 — Package metadata: no main/exports/license/repository (CONTRACT)
+
+**Amends:** §5.1 (package.json shape).
+
+**Decision.** `package.json` declares no `main`, `exports`, `license`, or `repository` field. The extension is reached only through the `pi.extensions` manifest.
+
+**Why.** Pi loads the TypeScript extension through `jiti` from the `pi` manifest; a `main`/`exports` entry would point at a file no consumer imports as a library. No `LICENSE` file exists in the repository, so a `license` identifier would be a claim without a file behind it. A `repository` URL adds nothing to Pi's resolution or npm install. Ecosystem packages vary here (`@arhen/pi-core-subagent` sets `main: "./src/index.ts"`, `pi-safe-shell` sets `main: "index.ts"`), so this is a deliberate minimal choice, not an omission.
+
+**Alternatives rejected.** Adding `main` pointing at the extension: misleading, because the file is not an importable API entrypoint. Adding a license identifier with no LICENSE file: an unverifiable claim.
+
+**Proof.** `package.json` contains none of those fields, and the manifest declares `pi.extensions: ["./extensions/pi-nobash.ts"]`, exercised by the integration tests.
+
+---
+
+## A14 — Extension entry path stays ./extensions/pi-nobash.ts (CONTRACT)
+
+**Amends:** §5 (package layout).
+
+**Decision.** The package keeps `pi.extensions: ["./extensions/pi-nobash.ts"]` rather than the ecosystem-common `./index.ts` or `./src/index.ts`.
+
+**Why.** The path is explicit in the manifest and already exercised by the integration tests; renaming is cosmetic churn with no functional gain. Ecosystem packages use a range of entry paths (`./index.ts`, `./src/index.ts`, `./extensions/workflow.ts`), so no single convention is violated.
+
+**Alternatives rejected.** Renaming for convention parity alone: churn in a committed, tested tree for style only.
+
+**Proof.** The `pi` manifest path resolves and the extension loads in `tests/integration/pi-runtime.test.ts`.
+
+---
+
 ## Explicitly not amended
 
 - Product scope, goals G1–G7, acceptance criteria AC1–AC11, and non-goals (Product Spec v1.7.3).
@@ -241,3 +289,5 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 - 2026-10-09 — A3 clarified: Biome and Fallow are development-only; added a `files` allowlist so the npm tarball cannot ship dev tooling, specs, tests, or `.mypi/` run state. Evidence: Pi `package-manager.js` installs with `--omit=dev`/`--prod`; `npm pack --dry-run` confirmed.
 - 2026-10-09 — added A10 (validation config read once at activation, foreign cwd rejected) after run 1's reviewer flagged the F9 composition route; Disler's Level 5 has no writable config surface, which informed the shape of the fix.
 - 2026-10-09 — added A11 (tool-registration completeness) from an ecosystem-alignment review of Pi 1.1.0 built-ins and published `pi-package`s: `promptSnippet` on every tool, accurate `readOnlyHint` hints, and no reliance on hoisted host imports.
+- 2026-10-09 — added A12 (inactive-by-default packaged tools) to record the deliberate divergence from packages that activate tools on install; implemented since run 1 and asserted by the phase-1 registration test.
+- 2026-10-09 — added A13 and A14 recording the run-3 package-metadata and entry-path decisions (no `main`/`exports`/`license`/`repository`; keep `./extensions/pi-nobash.ts`).

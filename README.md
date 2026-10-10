@@ -313,6 +313,10 @@ full, with rejected alternatives, in `docs/pi-nobash-technical-spec-amendments.m
 | A8 | Pi extension APIs (`registerCommand`, `registerTool`, `tool_call` blocking) are treated as test-verified, not assumed from docs. | Requires runtime tests against the pinned Pi version. |
 | A9 | Implementation, not the spec, freezes under-specified shared contracts before work starts. | Slower dispatch; fewer divergent interfaces between parallel authors. |
 | A10 | `.pi/pi-nobash.json` is read once at session start and never re-read; a foreign cwd is rejected; snapshots are keyed per session. | Config edits require a new session; in exchange, a writable workspace cannot swap a check's execution between write and use. |
+| A11 | Every packaged tool sets a one-line `promptSnippet` (so it appears in the default system prompt's Available tools section), accurate `annotations` (`readOnlyHint: true` on the six read-only tools, none on `run_validation`), and imports only host packages declared in the manifest. | One more metadata rule per tool, test-enforced (`tests/unit/registration.test.ts`); discovery and permission hints stay honest at the cost of keeping three tests green. |
+| A12 | Every packaged tool is registered with `defaultActive: false`: installing exposes no new model-facing tool until the developer names it in `defaultTools`. | Diverges from ecosystem packages (e.g. `pi-safe-shell`, which activates on install), so nothing changes for a model at install time; required by product goal G3 (per-agent tool selection). |
+| A13 | No `main`, `license`, or `repository` field in `package.json`. | Pi loads the extension via the `pi.extensions` manifest, not a library entrypoint (`main` would point at code that is never imported); no `LICENSE` file exists, so no license identifier can be declared truthfully; the repository is reachable where the package is hosted and no Pi or npm tooling needs the field. |
+| A14 | The entry path stays `pi.extensions: ["./extensions/pi-nobash.ts"]` instead of the ecosystem-common `./index.ts`. | Renaming is cosmetic churn; the manifest makes the path explicit and `extensions/pi-nobash.ts` is committed and loaded by the integration tests. |
 
 Additional contracts from the first implementation run:
 
@@ -341,19 +345,21 @@ Additional contracts from the first implementation run:
 
 ## Known issues
 
-Tracked for a follow-up run (`task-implement-3`):
+N1-N5 from the run-2 review are **resolved in run 3**:
 
-- **N1** `tests/performance/paired.test.ts` rewrites the tracked
-  `tests/performance/paired-results.json` on every `npm test`, dirtying the worktree.
-- **N2** `tests/integration/cli-process.test.ts` makes one live provider call inside
-  `npm test` (skipped when credentials are absent), so the default suite is not fully
-  offline or credential-free.
-- **N3** The validation session snapshot `Map` has no cleanup on session end; it grows
-  across many sessions in a long-lived process.
-- **N4** That CLI test copies `auth.json` into a temp directory; it is removed in an
-  `after()` hook, but a crash could leave the copy behind.
-- **N5** Git request path cap is 50 in `src/git/index.ts` while `MAX_GIT_PATHS` in
-  `src/constants.ts` says 100 and is unused; the spec text says 100.
+- **N1** the paired-performance test writes its fresh measurement to a temp dir and
+  asserts the shape still matches the frozen, tracked `paired-results.json`, which
+  `npm test` no longer rewrites.
+- **N2** the live provider call in `tests/integration/cli-process.test.ts` is opt-in
+  via `PI_NOBASH_LIVE_PROVIDER=1`; the default suite is offline and credential-free.
+- **N3** the validation snapshot `Map` releases a session's entry on Pi's verified
+  `session_shutdown` hook.
+- **N4** the CLI test's `auth.json` temp copy is scoped to the spawn and removed by
+  an `after()` hook plus exit, signal (SIGINT/SIGTERM), uncaught-exception, and
+  unhandled-rejection handlers; a SIGKILL or power loss is uncatchable and cannot be
+  handled by any process.
+- **N5** the git path cap is `MAX_GIT_PATHS` (100, spec 9.6) everywhere; the local
+  50 is gone, asserted by a schema test.
 - `npm run fallow` exits non-zero with refactor targets (no correctness defects);
   they are explicitly deferred.
 
@@ -361,7 +367,7 @@ Tracked for a follow-up run (`task-implement-3`):
 
 ```sh
 npm install
-npm test            # node --test            (91 tests)
+npm test            # node --test            (97 tests; 1 opt-in live-provider case skipped)
 npm run typecheck   # tsc --noEmit
 npm run lint        # biome check .
 npm run fallow      # fallow health
@@ -369,4 +375,5 @@ npm run fallow      # fallow health
 
 No build step. Runtime source lives in `extensions/` and `src/`; tests in `tests/`
 (unit, integration, coverage, performance). Local `pi` model calls in tests use the
-`deepseek` provider and skip when credentials are unavailable.
+`deepseek` provider and are **opt-in**: set `PI_NOBASH_LIVE_PROVIDER=1`. Without it
+the default suite performs no provider call and needs no credentials.
