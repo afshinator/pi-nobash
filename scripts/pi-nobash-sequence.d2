@@ -1,0 +1,17 @@
+# Sequence diagram for the design-decisions guide.
+# Render:  d2 scripts/pi-nobash-sequence.d2 docs/pi-nobash-sequence.svg
+shape: sequence_diagram
+
+Agent: LLM Agent
+Pi: Pi Extension Host
+Guard: pi-nobash (guard)
+Tool: Typed tool (json / git / validation)
+
+Agent -> Pi: call `bash`
+Pi -> Guard: intercept execution
+Guard -> Agent: reject (isError: true, "unconditional backstop")
+
+Agent -> Pi: call `run_validation`
+Pi -> Guard: validate check + args against config
+Guard -> Tool: bounded execution
+Tool -> Agent: structured JSON result
