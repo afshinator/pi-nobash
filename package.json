@@ -1,0 +1,40 @@
+{
+	"name": "pi-nobash",
+	"version": "2.3.0",
+	"description": "Opt-in Pi package to take bash away from the agent, allow configuirable sensible alternatives.",
+	"type": "module",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"keywords": [
+		"pi-package"
+	],
+	"files": [
+		"extensions",
+		"src",
+		"README.md"
+	],
+	"pi": {
+		"extensions": [
+			"./extensions/pi-nobash.ts"
+		]
+	},
+	"scripts": {
+		"test": "node --test",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"fallow": "fallow health"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@earendil-works/pi-coding-agent": "1.1.0",
+		"@types/node": "24.19.2",
+		"fallow": "3.33.0",
+		"typebox": "1.3.27",
+		"typescript": "5.9.3"
+	}
+}
