@@ -1,5 +1,7 @@
 # pi-nobash
 
+![pi-nobash: the shell is removed and replaced by a small set of purpose-built tools](assets/pi-nobash-hero.webp)
+
 Opt-in Pi package for agents that should not have model-facing Bash or any other
 general-purpose execution tool.
 
@@ -26,9 +28,33 @@ faces *unbounded consequences* when it holds a shell. `pi-nobash` removes the ge
 execution interface rather than trusting the model to avoid it, and supplies
 deliberately narrow alternatives for recurring engineering work.
 
+The danger compounds at scale. An automated software factory or an agent swarm runs many
+agents concurrently, for long stretches, usually with nobody watching each tool call. A
+single hallucinated path or destructive flag is no longer one mistake — it is that same
+mistake multiplied across every agent and every iteration, firing without a human in the
+loop. Narrowing each agent to a small, enumerated toolset bounds the blast radius per
+agent instead of relying on every model in the fleet to be careful.
+
+The same shape fits domain-specific agents that should never hold a shell at all — workers
+with one job and a known toolset. A billing-reconciliation agent might need only `read`,
+`grep`, and `json_query`; a docs agent `read`, `grep`, `find`, `edit`; a log-triage agent
+`read`, `grep`, `query_jsonl`. For these, `bash` has no upside: the agent never needs it,
+so every command-shaped failure mode is pure downside. Give it the exact set it uses and
+nothing else.
+
 The guiding rule: **the model picks a permitted capability and supplies bounded
 inputs; trusted code implements it. If a capability is missing, it stays missing
 and is reported as `CAPABILITY_GAP` — never routed to a shell.**
+
+What it looks like when an agent reaches for the shell:
+
+![pi-nobash demo: a direct bash call is blocked while a typed query_jsonl call passes](assets/pi-nobash-demo.gif)
+
+*Real extension and real `tool_call` pipeline with a canned model — deterministic and
+offline. Regenerate with `vhs scripts/demo-intercept.tape`.*
+
+The blocker is unconditional: it never reads the command text, so a plausible-looking
+command is refused exactly like a destructive one.
 
 ## What you get
 
@@ -56,6 +82,16 @@ Plus:
 - **`/nobash-status`**, a diagnostic command reporting the loaded package/version,
   effective active tools, presence of known general-execution tools, availability
   of the packaged tools, and any incomplete configuration.
+
+## Documentation
+
+Longer guides live in the repository; the links below open on GitHub and work from the npm
+package page too.
+
+- [Replacing Bash](https://github.com/afshinator/pi-nobash/blob/main/docs/replacing-bash.md) — what agents reach for the shell to do, what pi-nobash already covers, and the exact fix for each gap (config vs a small extension).
+- [Named validation](https://github.com/afshinator/pi-nobash/blob/main/docs/validation.md) — the `.pi/pi-nobash.json` reference and its session-start semantics.
+- [Tool reference](https://github.com/afshinator/pi-nobash/blob/main/docs/tool-reference.md) — parameters, outputs, bounds, and the error envelope for all seven tools.
+- [Design decisions and tradeoffs](https://github.com/afshinator/pi-nobash/blob/main/docs/design-decisions.md) — architecture, the A1–A14 decisions, and the non-goals.
 
 ## Install
 
@@ -94,6 +130,12 @@ applies after selection, and `--no-tools` starts with everything disabled. A lis
 removes Bash but leaves another generic runner active does **not** meet the no-execution
 goal — verify with `/nobash-status`.
 
+> **`bash` is not the only shell.** `pi-nobash` hard-blocks `bash` at the `tool_call`
+> level; `powershell` and `codemode` are excluded only by your tool selection and are
+> **not** blocked by this package. Drop them from the allowlist or add
+> `--exclude-tools powershell,codemode`, then confirm with `/nobash-status`, which
+> reports each known runner as `present` or `absent`.
+
 **Project settings (`.pi/settings.json`):**
 
 ```json
@@ -117,141 +159,20 @@ const { session } = await createAgentSession({
 
 A supervisor's toolset never governs separately created peer sessions; configure each one.
 
-## Configure named validation
+## When a capability is missing
 
-`run_validation` executes only checks a developer defined in `.pi/pi-nobash.json`
-under the workspace. The model can name a check and, for file-mode checks, choose
-from approved target files; it can never supply a program, argument, or script.
+A no-execution agent does not improvise a fallback. When the model asks for something the
+selected tools cannot express, the run stops at a visible `CAPABILITY_GAP` — a structured
+error result, or a `CAPABILITY_GAP:` statement when no tool exists at all — rather than
+inventing a command.
 
-```json
-{
-  "validation": {
-    "checks": {
-      "unit": {
-        "program": "npm",
-        "args": ["test"],
-        "cwd": ".",
-        "timeoutMs": 120000,
-        "targets": { "mode": "none" }
-      },
-      "typecheck": {
-        "program": "npm",
-        "args": ["run", "typecheck"],
-        "cwd": ".",
-        "timeoutMs": 120000,
-        "targets": { "mode": "none" }
-      },
-      "node_test_file": {
-        "program": "node",
-        "args": ["--test"],
-        "cwd": ".",
-        "timeoutMs": 60000,
-        "targets": {
-          "mode": "file",
-          "roots": ["tests", "src"],
-          "extensions": [".test.ts"],
-          "runner": "node_test"
-        }
-      }
-    }
-  }
-}
-```
+Coverage is explicit and finite. `.pi/pi-nobash.json` can add **validation checks**, and
+tool selection can grant **existing** tools, but neither mechanism can invent a new
+operation. Anything that is not already a tool needs a small Pi extension (one typed tool),
+which you then select per agent.
 
-Semantics that matter:
-
-- **The file is read once, at session start, and never re-read.** Editing it mid-session
-  has no effect; start a new session. This closes a composition route where a session
-  holding `write`/`edit` could change a check's program and then run it. A `run_validation`
-  call whose working directory differs from the session's bound directory is rejected with
-  `INVALID_ARGUMENT`.
-- **`targets.mode: "file"` requires a `runner` adapter.** Only `node_test` is verified
-  today (`node --test -- <file>`); any other runner name is rejected before a process
-  starts. Use `{"mode": "none"}` for full checks.
-- **Missing config file = no checks** (an empty set); malformed JSON or shape is `PARSE_ERROR`.
-- Targets must resolve inside `roots`, exist as regular files, match `extensions` when
-  set, must not have a final path segment starting with `-`, and are capped at 50.
-
-## Tool reference
-
-All tools return Pi's `AgentToolResult`. Successes carry model-facing text plus
-`structuredContent` matching the declared `outputSchema`. Expected failures return
-`isError: true`, text prefixed with the code (`"<CODE>: <message>"`), and
-`details = { code, capability?, message }`. Codes: `INVALID_ARGUMENT`, `PATH_OUT_OF_SCOPE`,
-`NOT_FOUND`, `PARSE_ERROR`, `LIMIT_EXCEEDED`, `TIMEOUT`, `VALIDATION_FAILED`, `GIT_FAILED`,
-`CAPABILITY_GAP`. Only unexpected `INTERNAL_ERROR` is thrown.
-
-### `json_query`
-
-```ts
-{
-  path: string,                 // JSON file, resolved against the session cwd
-  root?: JsonPath,              // array of {key} | {index} segments
-  where?: Predicate[],          // AND-combined
-  select?: { as: string, path: JsonPath }[],
-  aggregate?: { as: string, fn: "count"|"sum"|"min"|"max"|"avg", path?: JsonPath }[],
-  orderBy?: { field: string, direction: "asc"|"desc" }[],
-  limit?: number                // 1..500
-}
-```
-
-Predicates: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `exists`, `is_null`, `in`,
-`contains_string`. Output: `{ matched, returned, truncated, results }`. Numeric
-operators and `sum`/`min`/`max`/`avg` accept only JSON numbers — no string coercion.
-Ordering applies to projected scalar aliases, not raw paths.
-
-### `query_jsonl`
-
-Streams a JSONL file line by line.
-
-```ts
-{
-  path: string,
-  malformedLine: "error" | "skip",
-  where?: Predicate[],
-  select?: { as, path }[],
-  groupBy?: { as, path }[],
-  aggregate?: { as, fn, path? }[],
-  orderBy?: { field, direction }[],
-  limit?: number
-}
-```
-
-Output: `{ scannedLines, parsedLines, skippedMalformedLines, matchedLines, returnedRows, truncated, results }`.
-Streaming caps: 2 MiB per line, 10,000 distinct groups, 500 buffered rows for sorting —
-each exceeded cap is `LIMIT_EXCEEDED`, not a silent partial result.
-
-### Git (read-only)
-
-```ts
-git_status: { paths?: string[], includeUntracked?: boolean }
-git_diff:   { mode: "working"|"staged"|"commit", revision?: string, paths?: string[], contextLines?: 0..100 }
-git_log:    { maxEntries?: 1..200, paths?: string[] }
-git_show:   { revision: string, paths?: string[] }
-```
-
-`revision` is accepted only for `git_diff mode:"commit"` and `git_show`. Revisions are
-validated against a conservative charset and then verified with
-`git rev-parse --verify --quiet <rev>^{commit}` before use. Git is invoked directly with
-fixed argv — no shell, no free-form flags, no model-supplied command line. Outputs are
-bounded (100 KB per stream; `git_status` fails visibly rather than returning a truncated list).
-
-### `run_validation`
-
-```ts
-{ check: string, targets?: string[] }
-```
-
-Output: `{ check, targets, exitCode, timedOut, stdout, stderr, truncated, durationMs }`.
-A nonzero exit is `VALIDATION_FAILED`, not an internal error. Every check has a
-developer-set timeout; cancellation aborts the child process.
-
-### Bounds
-
-Model-facing limits are fixed constants, not model-chosen: 64 KiB per result text,
-500 structured rows (100 default), 32 MiB JSON input, 2 MiB JSONL line, 100 KB per
-Git stream, 200 Git log entries (50 default), 100 context lines, 50 paths per Git
-request, 50 validation targets.
+[Replacing Bash](https://github.com/afshinator/pi-nobash/blob/main/docs/replacing-bash.md) maps the observed shell uses to pi-nobash
+coverage and gives the exact fix for each gap.
 
 ## Diagnostics
 
@@ -279,73 +200,6 @@ a security attestation.
 - **Nothing is sandboxed.** `edit`/`write`, Git inspection, and repository-controlled
   validation can all have real effects. `pi-nobash` narrows the model's reach; it does
   not make permitted operations harmless.
-
-## Architecture
-
-```
-Pi session
-├── native selected tools        read / grep / find / ls / edit / write
-└── pi-nobash extension          extensions/pi-nobash.ts
-    ├── bash blocker             src/pi-guard.ts      (unconditional tool_call block)
-    ├── /nobash-status           src/status.ts        (pure report builder + command)
-    ├── json tools               src/json/            (operators, streaming, schemas)
-    ├── git tools                src/git/             (rev validation, bounded exec)
-    └── validation               src/validation/      (config, target, adapter, runner)
-        shared: src/constants.ts, src/errors.ts, src/path-policy.ts
-```
-
-Layer rules: Pi's native tool selection is authoritative; packaged tools are inactive
-until named; read-only and mutating capabilities are separate; trusted code owns
-mechanics (parsers, fixed executables, argv); unsupported work returns
-`CAPABILITY_GAP` rather than falling back to execution.
-
-## Implementation decisions and tradeoffs
-
-These decisions are not in the original product/technical spec; each is recorded in
-full, with rejected alternatives, in `docs/pi-nobash-technical-spec-amendments.md`
-(repo only, not shipped).
-
-| # | Decision | Tradeoff accepted |
-|---|---|---|
-| A1 | No build step; Pi's `jiti` loads the `.ts` source directly; tests use Node's built-in `node:test`; imports use explicit `.ts` specifiers. | No compiled artifact and no framework conveniences; `tsc --noEmit` is the type gate. |
-| A2 | Host packages (`pi-coding-agent`, `typebox`) are `peerDependencies: "*"`, not exact pins. | Follows Pi's package rule and avoids duplicate host modules; local dev pins exact versions in `devDependencies`. |
-| A3 | Biome and Fallow are development-only; a `files` allowlist ships only `extensions/`, `src/`, `README.md`. | npm consumers never receive dev tooling, tests, specs, or `.mypi/` run state. |
-| A4 | JSON operators are typed object shapes with a fixed verb list (no expression/query mini-language). | Irregular transformations are `CAPABILITY_GAP`, by design. |
-| A5 | Expected errors are returned as `isError: true` envelopes with `"<CODE>: <message>"` text; only internal faults throw. | Callers must read `details.code`; the model gets a consistent visible failure. |
-| A6 | Git revisions are shape-checked and then `rev-parse --verify`-confirmed; option-like paths are rejected; no `--` passthrough. | Some legitimate exotic revspecs are refused in exchange for no argv injection. |
-| A7 | Targeted validation uses a named runner adapter; only `node_test` is verified, everything else must use `targets.mode: "none"`. | Targeted runs are unavailable for other runners until an adapter is verified and tested. |
-| A8 | Pi extension APIs (`registerCommand`, `registerTool`, `tool_call` blocking) are treated as test-verified, not assumed from docs. | Requires runtime tests against the pinned Pi version. |
-| A9 | Implementation, not the spec, freezes under-specified shared contracts before work starts. | Slower dispatch; fewer divergent interfaces between parallel authors. |
-| A10 | `.pi/pi-nobash.json` is read once at session start and never re-read; a foreign cwd is rejected; snapshots are keyed per session. | Config edits require a new session; in exchange, a writable workspace cannot swap a check's execution between write and use. |
-| A11 | Every packaged tool sets a one-line `promptSnippet` (so it appears in the default system prompt's Available tools section), accurate `annotations` (`readOnlyHint: true` on the six read-only tools, none on `run_validation`), and imports only host packages declared in the manifest. | One more metadata rule per tool, test-enforced (`tests/unit/registration.test.ts`); discovery and permission hints stay honest at the cost of keeping three tests green. |
-| A12 | Every packaged tool is registered with `defaultActive: false`: installing exposes no new model-facing tool until the developer names it in `defaultTools`. | Diverges from ecosystem packages (e.g. `pi-safe-shell`, which activates on install), so nothing changes for a model at install time; required by product goal G3 (per-agent tool selection). |
-| A13 | No `main`, `license`, or `repository` field in `package.json`. | Pi loads the extension via the `pi.extensions` manifest, not a library entrypoint (`main` would point at code that is never imported); no `LICENSE` file exists, so no license identifier can be declared truthfully; the repository is reachable where the package is hosted and no Pi or npm tooling needs the field. |
-| A14 | The entry path stays `pi.extensions: ["./extensions/pi-nobash.ts"]` instead of the ecosystem-common `./index.ts`. | Renaming is cosmetic churn; the manifest makes the path explicit and `extensions/pi-nobash.ts` is committed and loaded by the integration tests. |
-
-Additional contracts from the first implementation run:
-
-- **Bootstrap interface:** `extensions/pi-nobash.ts` default-exports one factory that
-  calls `registerBashBlocker`, `registerStatusCommand`, `registerJsonTools`,
-  `registerGitTools`, `registerValidationTools`.
-- **Naming and exposure:** every packaged tool is `exposure: "direct"`,
-  `defaultActive: false`, snake_case, declares a TypeBox schema, and has no
-  `command`/`argv`/`script` parameter (asserted by a schema-audit test).
-- **No execution by composition:** there is no generic runner, `restricted_exec`,
-  codemode path, or model-selectable executable anywhere in the model-facing surface.
-
-## Limits and non-goals
-
-- Not a sandbox, container, or host-security product; no isolation guarantee.
-- No adversarial-jailbreak, prompt-injection, or containment claims.
-- No general command/code execution fallback, and no interpreter or arbitrary query language.
-- No universal control over third-party extensions; an agent given another generic
-  runner is outside the intended configuration even if this package is loaded.
-- `powershell` and `codemode` are excluded by tool selection and reported by
-  diagnostics; unlike `bash`, they are **not** hard-blocked by this package.
-- Optional Git mutations (`git_create_branch`, `git_add`, `git_commit`), typed file
-  mutations, and format conversions are deliberately deferred and not implemented.
-- The historical workload inventory's 411-vs-414 call-count discrepancy is
-  unreconciled; no coverage percentage is claimed.
 
 ## Known issues
 
@@ -381,3 +235,4 @@ No build step. Runtime source lives in `extensions/` and `src/`; tests in `tests
 (unit, integration, coverage, performance). Local `pi` model calls in tests use the
 `deepseek` provider and are **opt-in**: set `PI_NOBASH_LIVE_PROVIDER=1`. Without it
 the default suite performs no provider call and needs no credentials.
+
