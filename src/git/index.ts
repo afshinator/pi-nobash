@@ -3,13 +3,12 @@ import type {
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { MAX_GIT_PATHS } from "../constants.ts";
 import { gitDiff, gitLog, gitShow, gitStatus } from "./tools.ts";
-
-const MAX_PATHS = 50;
 
 const pathsParam = Type.Optional(
 	Type.Array(Type.String(), {
-		maxItems: MAX_PATHS,
+		maxItems: MAX_GIT_PATHS,
 		description: "Optional path filter",
 	}),
 );
@@ -53,6 +52,9 @@ export const gitStatusTool: ToolDefinition<typeof gitStatusParams, unknown> = {
 	label: "Git status",
 	description:
 		"Read-only normalized git status: branch, HEAD, and file status entries.",
+	promptSnippet:
+		"Read-only git status: branch, HEAD, and per-file status entries.",
+	annotations: { readOnlyHint: true },
 	parameters: gitStatusParams,
 	exposure: "direct",
 	defaultActive: false,
@@ -63,6 +65,9 @@ export const gitDiffTool: ToolDefinition<typeof gitDiffParams, unknown> = {
 	name: "git_diff",
 	label: "Git diff",
 	description: "Read-only git diff: working tree, staged, or against a commit.",
+	promptSnippet:
+		"Read-only git diff: working tree, staged, or against a commit.",
+	annotations: { readOnlyHint: true },
 	parameters: gitDiffParams,
 	exposure: "direct",
 	defaultActive: false,
@@ -73,6 +78,8 @@ export const gitLogTool: ToolDefinition<typeof gitLogParams, unknown> = {
 	name: "git_log",
 	label: "Git log",
 	description: "Read-only bounded git log with fixed fields.",
+	promptSnippet: "Read-only bounded git log: author, timestamp, subject.",
+	annotations: { readOnlyHint: true },
 	parameters: gitLogParams,
 	exposure: "direct",
 	defaultActive: false,
@@ -83,6 +90,9 @@ export const gitShowTool: ToolDefinition<typeof gitShowParams, unknown> = {
 	name: "git_show",
 	label: "Git show",
 	description: "Read-only single-commit inspection: metadata and diff.",
+	promptSnippet:
+		"Read-only single-commit inspection: metadata, message, and diff.",
+	annotations: { readOnlyHint: true },
 	parameters: gitShowParams,
 	exposure: "direct",
 	defaultActive: false,
