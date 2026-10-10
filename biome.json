@@ -1,6 +1,6 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
 	"files": {
-		"includes": ["**", "!**/.mypi"]
+		"includes": ["**", "!**/.mypi", "!**/assets/**", "!**/*.svg"]
 	}
 }

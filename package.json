@@ -10,6 +10,7 @@
 		"pi-package"
 	],
 	"files": [
+		"assets",
 		"extensions",
 		"src",
 		"README.md"
