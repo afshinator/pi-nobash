@@ -36,6 +36,7 @@ Every amendment, and every implementation slice that follows it, must reconcile 
 | A7 | G2/G4/G6, AC6/AC7/AC9 | none; narrows the surface | one verified adapter; reject-by-default | `tests/unit/validation/` |
 | A8 | G1/G5, AC2/AC3/AC10 | none | no guessed API frozen; the test decides | I2/I3/I7/I8 |
 | A9 | AC6/AC9, reviewer mandate | none (process) | one plan.md; no second spec file | reviewer checks plan.md contracts |
+| A10 | G1/G4, AC7 | none; narrows the surface | delete the per-cwd lazy map; one read, one immutable value | post-activation rewrite + foreign-cwd tests |
 
 No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future amendment that would is rejected here and escalated to a product decision instead.
 
@@ -52,6 +53,7 @@ No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future
 | A7 | Validation runner adapter registry | §8.2, §14.4, §14.5 | CONTRACT |
 | A8 | Pi API disposition | §3.6, §3.9, §17, §24 | TEST-GATED |
 | A9 | Pre-dispatch contract freeze | §22 delivery sequence | PROCESS |
+| A10 | Validation config load semantics (activation-time read) | §8.1, §8.2, §14 | CONTRACT |
 
 ---
 
@@ -186,6 +188,20 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 
 ---
 
+## A10 — Validation config load semantics (CONTRACT)
+
+**Amends:** §8.1, §8.2, §14. Resolves the F9 composition route found in run 1 (`task-implement-1`).
+
+**Decision.** `.pi/pi-nobash.json` is read **exactly once per Pi session, during extension activation**, for the session's `cwd`, and never re-read; the loaded check set is immutable for the session. A `run_validation` call whose `ctx.cwd` differs from the activation cwd is rejected with `INVALID_ARGUMENT` ("no validation config loaded for this workspace") rather than lazily loading that directory's config. A developer who edits the file starts a new session or reloads extensions. `loadValidationConfig` may still load on demand for direct, non-tool callers.
+
+**Why.** Run 1's reviewer identified a genuine composition route: lazy per-cwd reads let a session holding Pi `write`/`edit` change `program`/`args` in a not-yet-loaded config before its first `run_validation` call, then trigger execution — banned by product spec §4.3. Disler's Level 5 sidesteps this structurally: `run_tests` hardcodes `uv run pytest -q` in the extension source and takes `Type.Object({})` (zero parameters), so there is no writable command surface at all. This amendment reproduces that strength inside the spec's mandated `.pi/pi-nobash.json` path. Extension activation runs before any model turn, so a single read closes the window; rejecting foreign cwds keeps it closed. No capability or config mechanism is added.
+
+**Alternatives rejected.** A config fingerprint/hash: a new capability the product does not call for, and it still races a write before the first read. Moving config out of the workspace: diverges from §8.1's documented path. Lazy per-cwd caching: the exact window run 1 flagged. mtime-based re-reading: still composition.
+
+**Proof.** After activation, overwrite `.pi/pi-nobash.json` and assert `run_validation` still runs the activation-time check; a call with a different `ctx.cwd` returns `INVALID_ARGUMENT`.
+
+---
+
 ## Explicitly not amended
 
 - Product scope, goals G1–G7, acceptance criteria AC1–AC11, and non-goals (Product Spec v1.7.3).
@@ -204,3 +220,4 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 - 2026-10-09 — opened; A1-A9 recorded. A1-A7 CONTRACT, A8 TEST-GATED, A9 PROCESS. Verified against installed Pi 1.1.0 types and this environment's Node 24.19.0.
 - 2026-10-09 — added mandatory goal/Ponytail/TDD reconciliation rules and audited A1-A9 against them; no amendment adds uncalled-for model-facing capability.
 - 2026-10-09 — A3 clarified: Biome and Fallow are development-only; added a `files` allowlist so the npm tarball cannot ship dev tooling, specs, tests, or `.mypi/` run state. Evidence: Pi `package-manager.js` installs with `--omit=dev`/`--prod`; `npm pack --dry-run` confirmed.
+- 2026-10-09 — added A10 (validation config read once at activation, foreign cwd rejected) after run 1's reviewer flagged the F9 composition route; Disler's Level 5 has no writable config surface, which informed the shape of the fix.
