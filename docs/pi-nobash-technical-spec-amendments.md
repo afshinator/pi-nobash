@@ -37,6 +37,7 @@ Every amendment, and every implementation slice that follows it, must reconcile 
 | A8 | G1/G5, AC2/AC3/AC10 | none | no guessed API frozen; the test decides | I2/I3/I7/I8 |
 | A9 | AC6/AC9, reviewer mandate | none (process) | one plan.md; no second spec file | reviewer checks plan.md contracts |
 | A10 | G1/G4, AC7 | none; narrows the surface | delete the per-cwd lazy map; one read, one immutable value | post-activation rewrite + foreign-cwd tests |
+| A11 | G2/G4, AC6/AC7 | none; discovery and metadata only | one-line snippets and hints; declare an already-imported host package | snippet, annotation, and import-declaration tests |
 
 No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future amendment that would is rejected here and escalated to a product decision instead.
 
@@ -54,6 +55,7 @@ No amendment adds a model-facing capability beyond Product Spec v1.7.3. A future
 | A8 | Pi API disposition | §3.6, §3.9, §17, §24 | TEST-GATED |
 | A9 | Pre-dispatch contract freeze | §22 delivery sequence | PROCESS |
 | A10 | Validation config load semantics (activation-time read) | §8.1, §8.2, §14 | CONTRACT |
+| A11 | Tool-registration completeness (promptSnippet, hints, declared imports) | §3.6, §9.2 | CONTRACT |
 
 ---
 
@@ -202,6 +204,23 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 
 ---
 
+## A11 — Tool-registration completeness (CONTRACT)
+
+**Amends:** §3.6 (`ToolDefinition` fields), §9.2 (inputs). Derived from an ecosystem-alignment review of Pi 1.1.0's built-ins and published `pi-package`s.
+
+**Decision.** Every packaged model-facing tool MUST:
+1. set a one-line `promptSnippet`, so it appears in the default system prompt's "Available tools" section;
+2. set accurate `annotations`: `readOnlyHint: true` on `json_query`, `query_jsonl`, `git_status`, `git_diff`, `git_log`, and `git_show`; no read-only hint on `run_validation`, which spawns a process;
+3. import only host packages declared in `peerDependencies` (shipped code) or `devDependencies` (tests) — never rely on transitive hoisting.
+
+**Why.** Pi's own tools (`bash`, `read`, `grep`, `find`, `ls`, `edit`, `write`) all set `promptSnippet`, the `ToolDefinition` documentation states that custom tools are omitted from the "Available tools" section when it is absent, and `dist/core/agent-session.js` collects snippets into the prompt; the closest published analogue, `@aslamplr/pi-safe-shell`, sets it on every tool. Missing annotations default to *not read-only, may be destructive, open world*, which misleads permission-style extensions that read hints. Test code importing an undeclared host package resolves only through npm hoisting and breaks under strict or pnpm installs.
+
+**Alternatives rejected.** Relying on tool descriptions alone: their schema is sent, but the model loses the prose discovery cue every built-in and the closest analogue provide. Setting `readOnlyHint` on `run_validation`: false, since it executes a configured program.
+
+**Proof.** Unit tests asserting: every packaged tool has a non-empty `promptSnippet`; the six read-only tools declare `readOnlyHint` and `run_validation` does not; every bare import in `src/`, `extensions/`, and `tests/` is declared in the package manifest.
+
+---
+
 ## Explicitly not amended
 
 - Product scope, goals G1–G7, acceptance criteria AC1–AC11, and non-goals (Product Spec v1.7.3).
@@ -221,3 +240,4 @@ Revision strings are rejected unless they pass a conservative charset/shape chec
 - 2026-10-09 — added mandatory goal/Ponytail/TDD reconciliation rules and audited A1-A9 against them; no amendment adds uncalled-for model-facing capability.
 - 2026-10-09 — A3 clarified: Biome and Fallow are development-only; added a `files` allowlist so the npm tarball cannot ship dev tooling, specs, tests, or `.mypi/` run state. Evidence: Pi `package-manager.js` installs with `--omit=dev`/`--prod`; `npm pack --dry-run` confirmed.
 - 2026-10-09 — added A10 (validation config read once at activation, foreign cwd rejected) after run 1's reviewer flagged the F9 composition route; Disler's Level 5 has no writable config surface, which informed the shape of the fix.
+- 2026-10-09 — added A11 (tool-registration completeness) from an ecosystem-alignment review of Pi 1.1.0 built-ins and published `pi-package`s: `promptSnippet` on every tool, accurate `readOnlyHint` hints, and no reliance on hoisted host imports.
