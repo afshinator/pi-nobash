@@ -83,12 +83,35 @@ Plus:
   effective active tools, presence of known general-execution tools, availability
   of the packaged tools, and any incomplete configuration.
 
+## Three ways to change what an agent can do
+
+1. **Select tools** — Pi's `--tools`, `defaultTools`, or SDK `tools`. Chosen from tools that
+   already exist: this grants or withholds capability but creates nothing.
+2. **Configure `run_validation`** — `.pi/pi-nobash.json` maps a check name to a fixed,
+   developer-owned command. It is a **check**: tests, lint, typecheck, build, a schema
+   validator — a diagnostic the model may only *name*. Never hide a mutation here (a `git
+   add`, a delete, a formatter's write mode). A check that mutates misuses a diagnostic tool
+   and still cannot work, because the model has no way to pass a branch name, file list, or
+   commit message.
+3. **Write a Pi extension** — one typed tool per operation, for anything not already covered,
+   and specifically for anything that needs model-supplied parameters or that changes files
+   or history.
+
+Decision rule: **already a tool → select it. A fixed, read-only check → config. Anything
+with model-supplied parameters, or anything that mutates → extension.**
+
+Git as an example: read-only inspection needs nothing — `git_status`, `git_diff`, `git_log`,
+and `git_show` ship and are selectable today. Branch, stage, and commit are not shipped and
+cannot be configured, so they need a small extension registering `git_create_branch`,
+`git_add`, and `git_commit`.
+
 ## Documentation
 
 Longer guides live in the repository; the links below open on GitHub and work from the npm
 package page too.
 
 - [Replacing Bash](https://github.com/afshinator/pi-nobash/blob/main/docs/replacing-bash.md) — what agents reach for the shell to do, what pi-nobash already covers, and the exact fix for each gap (config vs a small extension).
+- [Stack setups](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md) — complete tool-list + checks + extension combinations for TypeScript (Node and React Native/Expo), Python, and Rust/Go.
 - [Named validation](https://github.com/afshinator/pi-nobash/blob/main/docs/validation.md) — the `.pi/pi-nobash.json` reference and its session-start semantics.
 - [Tool reference](https://github.com/afshinator/pi-nobash/blob/main/docs/tool-reference.md) — parameters, outputs, bounds, and the error envelope for all seven tools.
 - [Design decisions and tradeoffs](https://github.com/afshinator/pi-nobash/blob/main/docs/design-decisions.md) — architecture, the A1–A14 decisions, and the non-goals.
@@ -159,6 +182,9 @@ const { session } = await createAgentSession({
 
 A supervisor's toolset never governs separately created peer sessions; configure each one.
 
+Working combinations of the tool list, checks, and extensions for TypeScript (Node and
+React Native/Expo), Python, and Rust/Go: [Stack setups](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md).
+
 ## When a capability is missing
 
 A no-execution agent does not improvise a fallback. When the model asks for something the
@@ -166,10 +192,7 @@ selected tools cannot express, the run stops at a visible `CAPABILITY_GAP` — a
 error result, or a `CAPABILITY_GAP:` statement when no tool exists at all — rather than
 inventing a command.
 
-Coverage is explicit and finite. `.pi/pi-nobash.json` can add **validation checks**, and
-tool selection can grant **existing** tools, but neither mechanism can invent a new
-operation. Anything that is not already a tool needs a small Pi extension (one typed tool),
-which you then select per agent.
+Coverage is explicit and finite — [Three ways to change what an agent can do](#three-ways-to-change-what-an-agent-can-do) is the mechanism for closing a gap.
 
 [Replacing Bash](https://github.com/afshinator/pi-nobash/blob/main/docs/replacing-bash.md) maps the observed shell uses to pi-nobash
 coverage and gives the exact fix for each gap.

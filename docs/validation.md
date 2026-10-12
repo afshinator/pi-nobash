@@ -8,6 +8,13 @@ Part of [pi-nobash](https://github.com/afshinator/pi-nobash). For the tool surfa
 under the workspace. The model can name a check and, for file-mode checks, choose
 from approved target files; it can never supply a program, argument, or script.
 
+> **A check is a diagnostic, not a mutation.** Put tests, lint, typecheck, build, and
+> schema validation here — never a command that changes data or history (`git add`, a
+> delete, a formatter's write mode). The model can only choose the check *name*, so a
+> mutation hidden here is both a misuse of a diagnostic tool and unusable: it cannot take
+> a branch name, a file list, or a commit message. Mutations belong in a typed tool from a
+> separate extension.
+
 > **The file is read once, at session start, and never re-read.** Editing
 > `.pi/pi-nobash.json` mid-session has no effect; start a new session for changes to
 > take effect. This closes a composition route where a session holding `write`/`edit`
