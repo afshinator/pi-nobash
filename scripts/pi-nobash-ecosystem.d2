@@ -1,0 +1,130 @@
+# Ecosystem diagram: how pi-nobash core, docs/stacks, and companions/ relate.
+# Vertical (top-to-bottom) by design: containers use grid-columns:1 so the layout
+# goes long, not wide.
+# Render:  d2 --theme 0 scripts/pi-nobash-ecosystem.d2 docs/pi-nobash-ecosystem.svg
+direction: down
+
+title: "pi-nobash: core, stack docs, and companions" {
+  shape: text
+  style.font-size: 30
+  style.bold: true
+  style.font-color: "#0f172a"
+}
+
+docs: "docs/stacks/  —  recipes (documentation, GitHub-only)" {
+  style.fill: "#fef9c3"
+  style.stroke: "#ca8a04"
+  style.stroke-width: 2
+  grid-columns: 1
+  ts: "typescript.md  —  Node / web and React Native (Expo)"
+  py: "python.md"
+  rg: "rust-go.md"
+  exd: "examples/*.json  —  copyable .pi/pi-nobash.json checks" {
+    style.fill: "#fef3c7"
+    style.stroke: "#ca8a04"
+  }
+}
+
+levers: "Three developer levers (how capability is chosen)" {
+  style.fill: "#ffffff"
+  style.stroke: "#94a3b8"
+  grid-columns: 1
+  s1: "1. Select tools  —  Pi native: --tools / defaultTools / SDK tools"
+  s2: "2. Configure checks  —  .pi/pi-nobash.json (read-only commands)"
+  s3: "3. Load companions  —  pi -e ./companions/<area> (never automatic)"
+}
+
+sources: "Sources of tools and checks" {
+  style.fill: "#f8fafc"
+  style.stroke: "#cbd5e1"
+  grid-columns: 1
+
+  cfg: ".pi/pi-nobash.json  —  developer-owned check definitions" {
+    style.fill: "#ede9fe"
+    style.stroke: "#7c3aed"
+    style.stroke-width: 2
+  }
+
+  core: "pi-nobash core  —  the shipped package" {
+    style.fill: "#dcfce7"
+    style.stroke: "#16a34a"
+    style.stroke-width: 2
+    grid-columns: 1
+    entry: "extensions/pi-nobash.ts  (single entry point)"
+    guard: "bash blocker  —  unconditional tool_call block" {
+      style.fill: "#bbf7d0"
+    }
+    status: "/nobash-status  —  configuration diagnostic"
+    tools: "7 packaged tools: git_status · git_diff · git_log · git_show · json_query · query_jsonl · run_validation" {
+      style.fill: "#bbf7d0"
+    }
+  }
+
+  native: "Pi native tools  —  not shipped by pi-nobash" {
+    style.fill: "#e2e8f0"
+    style.stroke: "#475569"
+    n1: "read · grep · find · ls · edit · write"
+  }
+
+  companions: "companions/  —  opt-in extension source (proposed)" {
+    style.fill: "#ffedd5"
+    style.stroke: "#ea580c"
+    style.stroke-width: 2
+    grid-columns: 1
+    git: "git/  —  git_create_branch · git_add · git_commit · git_push" {
+      style.fill: "#fed7aa"
+    }
+    js: "javascript/  —  js_format_write · js_lint_fix · js_dep_add · js_dep_remove" {
+      style.fill: "#fed7aa"
+    }
+    py: "python/  —  py_format_write · py_lint_fix · py_dep_add · py_dep_remove" {
+      style.fill: "#fed7aa"
+    }
+    note: "loading core NEVER auto-loads these" {
+      style.fill: "#fee2e2"
+      style.stroke: "#dc2626"
+      style.stroke-dash: 4
+    }
+  }
+}
+
+agent: "Effective model-facing toolset  —  per agent = the union of what was selected for that session" {
+  style.fill: "#dbeafe"
+  style.stroke: "#1d4ed8"
+  style.stroke-width: 3
+  style.font-size: 18
+}
+
+blocked: "a `bash` call  →  BLOCKED  —  it never reaches a shell" {
+  style.fill: "#fee2e2"
+  style.stroke: "#dc2626"
+  style.stroke-width: 2
+}
+
+gap: "no tool for the request  →  CAPABILITY_GAP  —  no shell, interpreter, or generic runner" {
+  style.fill: "#f1f5f9"
+  style.stroke: "#64748b"
+  style.stroke-dash: 4
+}
+
+legend: "Legend" {
+  style.fill: "#ffffff"
+  style.stroke: "#94a3b8"
+  grid-columns: 1
+  l1: "Pi native tools (kept as-is)" { style.fill: "#e2e8f0"; style.stroke: "#475569" }
+  l2: "pi-nobash core (shipped; selected per agent)" { style.fill: "#dcfce7"; style.stroke: "#16a34a" }
+  l3: "companions (opt-in source; you write and select them)" { style.fill: "#ffedd5"; style.stroke: "#ea580c" }
+  l4: "configuration file" { style.fill: "#ede9fe"; style.stroke: "#7c3aed" }
+  l5: "documentation / copyable checks" { style.fill: "#fef9c3"; style.stroke: "#ca8a04" }
+  l6: "blocked path or declared gap" { style.fill: "#fee2e2"; style.stroke: "#dc2626" }
+}
+
+# Layout-only edges (opacity 0) keep the diagram in one vertical column.
+title -> docs { style.opacity: 0 }
+gap -> legend { style.opacity: 0 }
+
+docs -> levers: "the recipe tells you what to select, configure, and load"
+levers -> sources: "produces three artifacts"
+sources -> agent: "the selected union becomes the agent's toolset"
+sources -> blocked: "bash is blocked at the call boundary"
+agent -> gap: "the request has no matching tool"

@@ -29,6 +29,11 @@ own implementation:
 
 ![Sequence: bash is intercepted and rejected; run_validation is validated and executed, returning a structured result](./pi-nobash-sequence.svg)
 
+How the pieces relate — the shipped core, the stack recipes in `docs/stacks/`, and the opt-in
+companion extensions, plus the three levers that decide any one agent's toolset:
+
+![Ecosystem: docs/stacks recipes feed the three developer levers, which produce a configured check file, the selected core tools, native Pi tools, and loaded companion extensions, whose union is the agent's toolset; a bash call is blocked and an unmatched request is a CAPABILITY_GAP](./pi-nobash-ecosystem.svg)
+
 
 ## Implementation decisions and tradeoffs
 
