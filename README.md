@@ -115,6 +115,7 @@ package page too.
 - [Named validation](https://github.com/afshinator/pi-nobash/blob/main/docs/validation.md) — the `.pi/pi-nobash.json` reference and its session-start semantics.
 - [Tool reference](https://github.com/afshinator/pi-nobash/blob/main/docs/tool-reference.md) — parameters, outputs, bounds, and the error envelope for all seven tools.
 - [Design decisions and tradeoffs](https://github.com/afshinator/pi-nobash/blob/main/docs/design-decisions.md) — architecture, the A1–A14 decisions, and the non-goals.
+- [Roadmap](https://github.com/afshinator/pi-nobash/blob/main/docs/ROADMAP.md) — what is done (with dates) and what is next.
 
 ## Install
 

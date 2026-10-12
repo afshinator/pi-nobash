@@ -8,6 +8,10 @@
 **Implementation language:** TypeScript / ESM  
 **Package role:** Opt-in Pi package implementing the Level 5 no-Bash capability model
 
+> **Superseded in places.** This is the pinned design document, and it is long. The
+> [technical spec amendments](./pi-nobash-technical-spec-amendments.md) (**A1–A14**) override it
+> wherever they conflict. Read the amendments first; come here for the pinned detail.
+
 ---
 
 ## 1. Purpose

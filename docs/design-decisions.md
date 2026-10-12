@@ -32,26 +32,24 @@ own implementation:
 
 ## Implementation decisions and tradeoffs
 
-These decisions are not in the original product/technical spec; each is recorded in
-full, with rejected alternatives, in `docs/pi-nobash-technical-spec-amendments.md`
-(repo only, not shipped).
+Each decision that is not in the original product or technical specification is recorded in
+full, with rejected alternatives, in the [technical spec amendments](./pi-nobash-technical-spec-amendments.md)
+(**A1–A14**). That document is the single source of truth for the amendment numbers; what
+follows is a one-paragraph orientation, not a second copy.
 
-| # | Decision | Tradeoff accepted |
-|---|---|---|
-| A1 | No build step; Pi's `jiti` loads the `.ts` source directly; tests use Node's built-in `node:test`; imports use explicit `.ts` specifiers. | No compiled artifact and no framework conveniences; `tsc --noEmit` is the type gate. |
-| A2 | Host packages (`pi-coding-agent`, `typebox`) are `peerDependencies: "*"`, not exact pins. | Follows Pi's package rule and avoids duplicate host modules; local dev pins exact versions in `devDependencies`. |
-| A3 | Biome and Fallow are development-only; a `files` allowlist ships only `extensions/`, `src/`, `README.md`. | npm consumers never receive dev tooling, tests, specs, or `.mypi/` run state. |
-| A4 | JSON operators are typed object shapes with a fixed verb list (no expression/query mini-language). | Irregular transformations are `CAPABILITY_GAP`, by design. |
-| A5 | Expected errors are returned as `isError: true` envelopes with `"<CODE>: <message>"` text; only internal faults throw. | Callers must read `details.code`; the model gets a consistent visible failure. |
-| A6 | Git revisions are shape-checked and then `rev-parse --verify`-confirmed; option-like paths are rejected; no `--` passthrough. | Some legitimate exotic revspecs are refused in exchange for no argv injection. |
-| A7 | Targeted validation uses a named runner adapter; only `node_test` is verified, everything else must use `targets.mode: "none"`. | Targeted runs are unavailable for other runners until an adapter is verified and tested. |
-| A8 | Pi extension APIs (`registerCommand`, `registerTool`, `tool_call` blocking) are treated as test-verified, not assumed from docs. | Requires runtime tests against the pinned Pi version. |
-| A9 | Implementation, not the spec, freezes under-specified shared contracts before work starts. | Slower dispatch; fewer divergent interfaces between parallel authors. |
-| A10 | `.pi/pi-nobash.json` is read once at session start and never re-read; a foreign cwd is rejected; snapshots are keyed per session. | Config edits require a new session; in exchange, a writable workspace cannot swap a check's execution between write and use. |
-| A11 | Every packaged tool sets a one-line `promptSnippet` (so it appears in the default system prompt's Available tools section), accurate `annotations` (`readOnlyHint: true` on the six read-only tools, none on `run_validation`), and imports only host packages declared in the manifest. | One more metadata rule per tool, test-enforced (`tests/unit/registration.test.ts`); discovery and permission hints stay honest at the cost of keeping three tests green. |
-| A12 | Every packaged tool is registered with `defaultActive: false`: installing exposes no new model-facing tool until the developer names it in `defaultTools`. | Diverges from ecosystem packages (e.g. `pi-safe-shell`, which activates on install), so nothing changes for a model at install time; required by product goal G3 (per-agent tool selection). |
-| A13 | No `main`, `license`, or `repository` field in `package.json`. | Pi loads the extension via the `pi.extensions` manifest, not a library entrypoint (`main` would point at code that is never imported); no `LICENSE` file exists, so no license identifier can be declared truthfully; the repository is reachable where the package is hosted and no Pi or npm tooling needs the field. |
-| A14 | The entry path stays `pi.extensions: ["./extensions/pi-nobash.ts"]` instead of the ecosystem-common `./index.ts`. | Renaming is cosmetic churn; the manifest makes the path explicit and `extensions/pi-nobash.ts` is committed and loaded by the integration tests. |
+- **A1–A3 — build, packaging, tooling.** No build step (Pi loads the `.ts` through `jiti`);
+  host packages are `peerDependencies: "*"`; Biome and Fallow are dev-only, with a `files`
+  allowlist that keeps dev tooling, tests, specs, and run state out of the npm tarball.
+- **A4–A7 — data, errors, execution boundaries.** Typed JSON/JSONL operators with a fixed verb
+  list (no query mini-language); `isError` error envelopes with a `"<CODE>: "` text prefix;
+  Git revisions shape-checked then `rev-parse --verify`-confirmed; targeted validation only
+  through the verified `node_test` adapter.
+- **A8–A10 — verification and configuration.** Pi extension APIs are test-verified, not assumed
+  from docs; under-specified shared contracts are frozen before work starts; `.pi/pi-nobash.json`
+  is read once at session start and never re-read.
+- **A11–A14 — registration and metadata.** Every tool carries a `promptSnippet` and accurate
+  `readOnlyHint`; every tool is `defaultActive: false`; no `main`/`license`/`repository`; the
+  entry path stays `./extensions/pi-nobash.ts`.
 
 Additional contracts from the first implementation run:
 
