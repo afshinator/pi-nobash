@@ -29,7 +29,9 @@ priority. Detail always lives in the linked document, not here.
 
 ## P0 — stack companions: shared Git and formatters
 
-Planned by `task-plan-4`; see the [companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3.
+Planned by `task-plan-4` (output: `docs/plans/pi-nobash-companions-implementation-plan.md`);
+see the [companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3. The
+items below are **not implemented** — the run produces the plan, not the code.
 
 - [ ] Shared Git mutations: `git_create_branch`, `git_add`, `git_commit`, `git_push` (non-force, typed remote/branch)
 - [ ] `js_format_write` (Node/web and Expo)
@@ -50,7 +52,18 @@ Planned by `task-plan-4`; see the [companions handoff](./pi-nobash-stack-compani
 
 ## Later / evaluation
 
-- [ ] Go diagnostics reuse: adopt/adapt/defer decision on `mcp-server-go-quality` (evaluation only, no integration yet)
+- [ ] **Go diagnostics reuse (deferred from task-plan-4).** Decide adopt/adapt/defer for
+      [`mcp-server-go-quality`](https://github.com/afshinator/mcp-server-go-quality) as a Go
+      diagnostics companion. Deferred because it needs read-only source/network review of an
+      external repo; `task-plan-4` records the question, this checklist, and the reason
+      instead of an evaluation. Resolve when picked up:
+  - [ ] automatic `install_tools` must never be exposed as a read-only check or run silently
+  - [ ] its `extra_args` must not become model-supplied argv (review config ownership and session-load behavior)
+  - [ ] the model may choose only enumerated diagnostics and bounded scope
+  - [ ] verify side effects: caches, tool/binary downloads, network access, project-controlled code
+  - [ ] confirm Pi integration (MCP is not a Pi extension; adapter or Pi-native rewrite)
+  - [ ] constrain workspace roots, output cardinality, `native` payload size, cancellation
+  - [ ] review license, pinning/reproducibility, and adapt-vs-depend
 - [ ] Rust and Go mutation tools (`rust_format_write`, `go_format_write`, `go_mod_tidy`, dependency tools)
 
 ## Known debt
