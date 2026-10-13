@@ -51,7 +51,10 @@ companions/
 
 - One named operation per tool; typed inputs with no `command`, `argv`, `script`, or
   executable field.
-- A fixed executable and fixed argv shape chosen by trusted code — never by the model.
+- A fixed executable and fixed argv shape chosen by trusted code — never by the model. The
+  backend (formatter, linter, package manager) is developer-owned project config in
+  `.pi/pi-nobash-companions.json`, read once at session start and validated against a fixed
+  enum; config names a backend, never a command.
 - Bounded output, a per-tool timeout, and cancellation.
 - `defaultActive: false` plus a one-line `promptSnippet` and accurate `annotations`.
 - Unsupported operations return `CAPABILITY_GAP`; there is no generic runner, interpreter, or

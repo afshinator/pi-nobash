@@ -1,6 +1,9 @@
 # Companions implementation plan (task-plan-4)
 
 **Status:** Plan for review — no companion code is implemented by this run.
+**Amended 2026-10-13 (FD5):** backend selection (formatter, linter, package
+manager) is **developer-owned project config** in `.pi/pi-nobash-companions.json`,
+read once at session start — not an in-source constant. See FD5 and PD7.
 **Inputs:** [repository inventory A1](./pi-nobash-repository-inventory.md) (facts,
 paths, primitives — reused by reference, not copied here),
 [companions handoff](../pi-nobash-stack-companions-handoff-2026-10-11.md) §3–§9,
@@ -24,9 +27,10 @@ field. A missing operation returns `CAPABILITY_GAP` (via the `ToolError`
 envelope, A5) — never a shell, interpreter, generic runner, or model-authored
 config. Every companion tool registers `exposure: "direct"`,
 `defaultActive: false` (A12), a one-line `promptSnippet`, and accurate
-annotations (A11). Companion check templates are developer-owned and read once
-at session start (A10); no mutation command (`--fix`, `--write`, `git add`,
-dependency changes) ever appears in `.pi/pi-nobash.json` (D6/PD6). Amendments
+annotations (A11). Companion check templates and companion backend config are
+developer-owned and read once at session start (A10); no mutation command
+(`--fix`, `--write`, `git add`, dependency changes) ever appears in
+`.pi/pi-nobash.json` (D6/PD6). Amendments
 D1–D7 (handoff §1) are honored throughout and mapped in the Frozen decisions.
 
 ---
@@ -185,29 +189,72 @@ a deliberately enabled mode) that serves "stage my modifications" without new fi
 granularity (the two modes are separate argv shapes, declared not implied —
 `trackedOnly` is a boolean, not a route to `-A`).
 
-**FD5 — Formatter selection per stack.**
-One fixed formatter backend per stack companion, chosen by the developer in
-trusted code (a one-line constant at the top of the module), never a schema
-field:
+**FD5 — Formatter, linter, and package-manager backends are developer-owned
+project config, read once (A10).**
+The backend for each stack companion is selected by the developer in
+`.pi/pi-nobash-companions.json`, read **once per session at session start**
+(amendment A10 semantics: the `session_start` handler, session-id keyed,
+immutable for that session, foreign-cwd calls rejected) and validated at load
+with a clear `PARSE_ERROR` (bad JSON, unknown key, non-enum value). The model
+**never** picks a backend: it is configuration, not a tool parameter — no
+schema field, no flag, no executable path, in any tool.
 
-- `javascript/format-write.ts`: `const FORMATTER: "prettier" | "biome" = "prettier"`
-- `python/format-write.ts`: fixed `ruff` (no constant needed — Ruff is the only
-  supported backend; see A7-4 for adding others)
+Config values are **enumerated names, never executables**: trusted companion
+code maps each name to a fixed program and fixed argv shape (`npx prettier`,
+`npx biome`, `npx eslint`, `ruff`, `npm`, `uv`). A value outside the enum is
+rejected at session start. This keeps the A10 composition route closed even for
+a session holding Pi `write`/`edit`: rewriting the config can only switch among
+the enumerated backends, never introduce an arbitrary command.
 
-Invocations: Prettier `npx prettier --write -- <files>`; Biome
-`npx biome format --write -- <files>`; Ruff `ruff format -- <files>`.
-Backend selection lives in the companion file because the developer who copies
-the companion is the same person who chose the project's formatter; a schema
-field would let the model pick an executable path/flag set (PD6 violation).
+Schema (one file, one schema; all keys optional; unknown keys → `PARSE_ERROR`):
 
-*Rationale:* docs/stacks/typescript.md names Prettier and Biome as the two
-established choices; Ruff is the docs' sole Python formatter. Smallest honest
-switch: one constant, two fixed argv builders.
-*Rejected:* `backend: "prettier" | "biome"` schema field (model-supplied
-backend selection = arbitrary-executable-adjacent surface); one companion file
-per backend (two files to keep in sync for one line of difference); config-file
-driven selection (new machinery the product forbids: "no model-authored config"
-— and a developer config read for a formatter name is machinery, not need).
+```json
+{
+  "companions": {
+    "javascript": { "formatter": "prettier", "linter": "biome", "packageManager": "npm" },
+    "python": { "formatter": "ruff", "linter": "ruff", "packageManager": "uv" }
+  }
+}
+```
+
+P0 reads only `formatter` (defaults `prettier`, `ruff`); P1 adds `linter`
+(default `biome`) and `packageManager` (defaults `npm`, `uv`). P0/P1 enum
+members: `javascript.formatter` ∈ {`prettier`,`biome`},
+`javascript.linter` ∈ {`biome`,`eslint`}, `javascript.packageManager` ∈ {`npm`},
+`python.formatter`/`python.linter` = `ruff` only, `python.packageManager` =
+`uv` only (FD6). The enum is the extension point for a future reviewed backend
+(A7-4, A7-5) — never a model input.
+
+Invocations (fixed per selected backend): Prettier
+`npx prettier --write -- <files>`; Biome format `npx biome format --write -- <files>`;
+Biome lint `npx biome check --write -- <files>`; ESLint
+`npx eslint --fix -- <files>`; Ruff format `ruff format -- <files>`; Ruff lint
+`ruff check --fix -- <files>`.
+
+*Rationale:* a companion is loaded **in place** from the package (FD1), so an
+in-source constant is developer-owned only if the companion is vendored — which
+contradicts load-in-place and is overwritten by the next package upgrade. A
+project config file survives upgrades and is version-controlled with the
+project, so the developer's choice is durable. docs/stacks/typescript.md names
+Prettier and Biome as the two established choices; Ruff is the docs' sole
+Python formatter.
+
+**File choice (why not inside `.pi/pi-nobash.json`).** A top-level `companions`
+key in the existing `.pi/pi-nobash.json` is **rejected for this run**: core
+`src/config.ts` `parseConfig` rejects any unknown top-level key (`unknown
+top-level config keys: …`, asserted by `tests/unit/config/config.test.ts`), so
+adding `companions` there would break `run_validation` in every adopting project
+unless **core** `src/config.ts` changed — which this run's write scope forbids.
+The sibling file keeps core untouched and keeps PD7's "no companion reads
+`.pi/pi-nobash.json`" true verbatim. Revisit only if a core change is separately
+authorized.
+
+*Rejected:* the in-source one-line constant (lost on package upgrade; not
+version-controlled with the project); `backend: "prettier" | "biome"` schema
+field (model-supplied backend selection); a config value naming an executable
+path or argv (arbitrary-execution surface — the validated enum is what makes
+config safe); a top-level `companions` key in `.pi/pi-nobash.json` (breaks core
+config parsing unless core changes; see File choice).
 
 **FD6 — Initial package-manager coverage.**
 - Checks templates (config, P0): npm, pnpm (TS/Node); Expo via npx; Python via
@@ -215,14 +262,16 @@ driven selection (new machinery the product forbids: "no model-authored config"
   docs/stacks (change `program`/`args` only), not separate template files.
 - Lint fixes (P1): the tool spawns the project-local binary the same way the
   formatter does — `npx biome check --write`/`npx eslint --fix` per the
-  `LINTER` constant (default `biome`), `ruff check --fix` for Python. Safe fixes
-  only; no `--unsafe-fixes` (separate tool if ever justified — P2).
+  configured `javascript.linter` (default `biome`), `ruff check --fix` for
+  Python. Safe fixes only; no `--unsafe-fixes` (separate tool if ever justified
+  — P2).
 - Dependency tools (P1): **npm** for `js_dep_add`/`js_dep_remove`
   (`npm install`/`npm uninstall`, always with `--ignore-scripts`), **expo** for
   `expo_dep_add` (`npx expo install`), **uv** for `py_dep_add`/`py_dep_remove`
   (`uv add [--dev]` / `uv remove`). One backend each, fixed argv, no
   model-supplied flags. pnpm/yarn/bun/Poetry/pipenv variants are
-  `CAPABILITY_GAP` until a separately reviewed backend constant is added.
+  `CAPABILITY_GAP` until a separately reviewed backend is added to the config
+  enum (FD5).
 - `run_validation` target adapters: unchanged — `node_test` is the only
   verified adapter (A7); templates use `targets.mode: "none"` everywhere else.
 
@@ -236,11 +285,15 @@ semantics — the mutation is unreviewable); `npx <pkg>` as a dep tool (npx
 fetches and runs arbitrary package code — a generic runner by another name).
 
 **PD7/D6 restated — no generic execution route.** No companion reads
-`.pi/pi-nobash.json`, no companion exposes a command/argv/script field, no
-package-manager `run`/`exec` script invocation exists in any companion
-(`npm install` lifecycle scripts are disabled with `--ignore-scripts`), and
-linter fixers get enumerated safe-fix modes only. The proving tests are in A6
-(`no-command-field` rows + `core-no-companion-exposure`).
+`.pi/pi-nobash.json` (the core validation config) or executes anything from it;
+the only file a companion reads is its own `.pi/pi-nobash-companions.json`,
+whose values are enumerated backend names that trusted code maps to fixed argv
+(FD5) — never a program, path, or argument string. No companion exposes a
+command/argv/script field, no package-manager `run`/`exec` script invocation
+exists in any companion (`npm install` lifecycle scripts are disabled with
+`--ignore-scripts`), and linter fixers get enumerated safe-fix modes only. The
+proving tests are in A6 (`no-command-field` rows + `core-no-companion-exposure`
++ the config-enum rows).
 
 ---
 
@@ -252,7 +305,7 @@ linter fixers get enumerated safe-fix modes only. The proving tests are in A6
 | FD2 distribution | Add `companions` to `files`; manifest stays single-entry | A second acquisition path, per-companion packages |
 | FD3 push | Resolve branch → validate remote → `git push [--set-upstream] <remote> <branch>` | refspec, force variants, remote creation |
 | FD4 staging | `git add -- paths` (file or directory) plus `git add -u` | `-A`/all, pathspec globs, a granularity enum |
-| FD5 formatters | One-line backend constant + two argv builders per stack | Schema field, config file, formatter auto-detection, plugins |
+| FD5 backends | Project config (`.pi/pi-nobash-companions.json`) read once at session start + one fixed argv builder per enum member | In-source constant, schema field, config value naming an executable/argv, auto-detection, plugins |
 | FD6 managers | npm/expo/uv only | yarn, bun, pnpm dep tools; Poetry/pipenv |
 | Shared runner | `companions/process.ts` (~40 lines, modeled on `execGit`) | New dependency (execa etc.) — stdlib `child_process` only |
 | Schema bounds | Reuse `src/constants.ts` caps; add `MAX_FORMAT_PATHS = 50` | Per-tool configurable limits |
@@ -281,6 +334,20 @@ per-stream 100 KB output caps with `truncated` flag, AbortSignal support
 `{ code, stdout, stderr, truncated, timedOut }`. Non-zero exit is returned, not
 thrown — callers decide `GIT_FAILED` vs `VALIDATION_FAILED`-style codes.
 Mirrors `src/git/exec.ts`; ~40 lines, stdlib only.
+
+### Shared: `companions/config.ts` (FD5)
+
+`loadCompanionConfig(dir)` reads `.pi/pi-nobash-companions.json` under the
+session cwd and validates the schema. Missing file → defaults (`prettier`,
+`ruff` for P0). Unknown key, non-enum value, or malformed JSON →
+`ToolError("PARSE_ERROR", …)`. Read **once at session start** using the
+`session_start` handler pattern of `src/validation/index.ts` (session-id keyed
+map, `session_shutdown` cleanup); the registration-cwd read is the
+direct-caller fallback, exactly as core treats `.pi/pi-nobash.json`. A call
+whose `ctx.cwd` differs from the bound session cwd is rejected
+(`INVALID_ARGUMENT`, "no companion config loaded for this workspace"). The
+module maps each enum member to a fixed `{ program, args }` builder; config
+never supplies an executable path. ~60 lines, stdlib only.
 
 ### P0-1 `git_create_branch` — `companions/git/create-branch.ts`
 
@@ -429,10 +496,11 @@ Type.Object({
   file, extension must be one of the backend's handled set (Prettier:
   `.ts .tsx .js .jsx .json .css .md …` — fixed list in the module; Biome: its
   supported set). Unknown extension → `INVALID_ARGUMENT` before spawn.
-- **Invocation (FD5):** Prettier default —
-  `npx prettier --write -- <resolved paths…>`; Biome —
-  `npx biome format --write -- <resolved paths…>`. Backend via the module
-  constant. Spawned by `execFixed`, `cwd` = session cwd, shell false.
+- **Invocation (FD5):** backend from `companions.javascript.formatter`
+  (default `prettier`), read once at session start — Prettier
+  `npx prettier --write -- <resolved paths…>`; Biome
+  `npx biome format --write -- <resolved paths…>`. Spawned by `execFixed`,
+  `cwd` = session cwd, shell false.
 - **Effects/limits:** rewrites the named files in place only. No config file is
   read *by the tool* beyond the formatter's own project config discovery
   (`prettier.config`/`biome.json` — documented; the model cannot point the tool
@@ -446,8 +514,10 @@ Type.Object({
   untouched); out-of-scope path rejected (`..`, symlink, absolute); option-like
   filename rejected; `node_modules` path inside workspace rejected (fixed deny
   list: `node_modules`, `.git`, `dist`, `build`); timeout produces `TIMEOUT`
-  with partial effects documented; backend constant produces exactly the frozen
-  argv (arg-builder unit test).
+  with partial effects documented; the configured backend produces exactly the
+  frozen argv (arg-builder unit test); no config file → Prettier default; a
+  non-enum `formatter` value or unknown key → `PARSE_ERROR` at session start;
+  the session-start read wins over a mid-session config edit.
 
 ### P0-6 `py_format_write` — `companions/python/format-write.ts`
 
@@ -456,7 +526,8 @@ Same shape as P0-5 with fixed Ruff backend:
 - **Schema:** identical `{ paths: string[] }`, 1..50.
 - **Validation:** `validateWorkspacePath`, regular file, extension
   `.py`/`.pyi`.
-- **Invocation:** `ruff format -- <resolved paths…>` via `execFixed` (Ruff
+- **Invocation:** backend from `companions.python.formatter` (enum: `ruff`,
+  default `ruff`) — `ruff format -- <resolved paths…>` via `execFixed` (Ruff
   format writes by default; `--` separates validated paths). `ruff` resolved
   from PATH/project venv — same interpreter assumption as the python-venv
   checks template; documented in the module header.
@@ -504,8 +575,10 @@ parseable by `src/config.ts`'s `ValidationCheck` shape.
    `defaultActive` tools active.
 3. **M2 — `git_push`:** `companions/git/push.ts` + bare-remote fixtures
    (upstream, rejection, no-force).
-4. **M3 — Formatters:** `companions/javascript/format-write.ts`,
-   `companions/python/format-write.ts` + byte-diff fixtures.
+4. **M3 — Formatters:** `companions/config.ts` (schema, session-start read,
+   enum→argv builders), `companions/javascript/format-write.ts`,
+   `companions/python/format-write.ts` + byte-diff and config-validation
+   fixtures.
 5. **M4 — Templates + docs:** templates (done — this run), A5 relabeling of
    `docs/stacks/*.md` links to the companions and templates.
 
@@ -522,10 +595,11 @@ envelope, bounds). Safe-mode-first, fixed backends, no model flags.
 ### P1-1 `js_lint_fix` — `companions/javascript/lint-fix.ts`
 
 - **Schema:** `{ paths: string[] }` (1..50), same validation as P0-5.
-- **Invocation (backend constant `LINTER: "biome" | "eslint" = "biome"`):**
-  Biome: `npx biome check --write -- <paths>` (safe fixes only — Biome's
-  `--write` applies safe fixes; unsafe require `--unsafe`, which is never
-  emitted). ESLint: `npx eslint --fix -- <paths>` (safe fixes by default).
+- **Invocation (backend from `companions.javascript.linter`, default
+  `biome`):** Biome: `npx biome check --write -- <paths>` (safe fixes only —
+  Biome's `--write` applies safe fixes; unsafe require `--unsafe`, which is
+  never emitted). ESLint: `npx eslint --fix -- <paths>` (safe fixes by
+  default).
 - **Modes:** safe only. Unsafe fixes are a **separate, not-yet-designed** tool
   (`js_lint_fix_unsafe` candidate, P2) — never a flag on this one (handoff:
   "review safe/unsafe modes separately").
@@ -567,7 +641,8 @@ envelope, bounds). Safe-mode-first, fixed backends, no model flags.
   `npm:pkg@ver` → `INVALID_ARGUMENT`). The tool installs the version the
   project's registry resolves — never a model-chosen version or tarball. Names
   never after `--` (npm install has no `--` separator need; argv is fixed).
-- **Invocation:** `npm install [--save-dev] <names…>` /
+- **Invocation:** package manager from `companions.javascript.packageManager`
+  (enum: `npm`, default `npm`; FD5) — `npm install [--save-dev] <names…>` /
   `npm uninstall <names…>`, **always plus `--ignore-scripts`**.
 - **`--ignore-scripts` decision (frozen):** required. `npm install` runs
   `preinstall`/`postinstall` lifecycle code from the installed package —
@@ -581,7 +656,8 @@ envelope, bounds). Safe-mode-first, fixed backends, no model flags.
 - **Other side effects:** rewrites `package.json` + `package-lock.json`
   (reviewable diff via `git_diff`); **network access** (registry fetch);
   no `--force`, no `--legacy-peer-deps`, no registry override. Timeout 300 s.
-  pnpm/yarn/bun: `CAPABILITY_GAP` (FD6).
+  pnpm/yarn/bun: `CAPABILITY_GAP` until added to the `packageManager` enum
+  (FD5/FD6).
 - **`details`:** `{ packages: string[]; dev: boolean; manifestUpdated: true }`.
 
 ### P1-5 `expo_dep_add` — `companions/expo/dep-add.ts`
@@ -605,14 +681,17 @@ envelope, bounds). Safe-mode-first, fixed backends, no model flags.
   `[A-Za-z0-9._-]+`, no extras, no version specifiers, no URLs, no VCS links
   (`pkg>=2`, `pkg @ file://…`, `git+https://…` → `INVALID_ARGUMENT`). uv
   resolves the version.
-- **Invocation (uv only, FD6):** `uv add [--dev] <names…>` / `uv remove <names…>`.
+- **Invocation:** package manager from `companions.python.packageManager`
+  (enum: `uv`, default `uv`; FD5) — `uv add [--dev] <names…>` /
+  `uv remove <names…>`.
 - **Side-effect analysis:** rewrites `pyproject.toml` + `uv.lock`
   (reviewable diff); network (PyPI fetch); **uv does not run arbitrary
   lifecycle scripts on add** (uv installs wheels; build isolation runs the
   package's build backend — `pdm`/`setuptools` build code, not install-time
   scripts of the dependency). No `--index-url`/extra-index flags, no
   extras (`pkg[foo]` rejected with the name grammar). Timeout 300 s.
-- **Poetry/pipenv:** `CAPABILITY_GAP` (FD6). `pip install`: rejected in FD6 —
+- **Poetry/pipenv:** `CAPABILITY_GAP` until added to the `packageManager` enum
+  (FD5/FD6). `pip install`: rejected in FD6 —
   no lockfile mutation to review.
 - **`details`:** `{ packages: string[]; dev: boolean }`.
 
@@ -722,7 +801,8 @@ git fixtures live in temp dirs; bare remotes are throwaway `git init --bare`.
 | `git_add` | stages named pair incl. untracked; rename pair | ignored file; nonexistent path | `..`, absolute, symlink-escape, option-like segment, leading-`:` pathspec (`:(glob)`, `:!`) → `INVALID_ARGUMENT`, 101st path → `LIMIT_EXCEEDED` | argv exactly `["add","--",…paths]` with child env `GIT_LITERAL_PATHSPECS=1` (literal paths, no pathspec magic); no `-A`/`-u` expressible (schema has no field) |
 | `git_commit` | one commit, message byte-equal, filesCommitted | failing `pre-commit` hook → `GIT_FAILED`; empty index pre-check | message ≤ 4000; no field can stage/amend/verify-off | argv exactly `["commit","-m",message]`; no-auto-stage test (unstaged edit excluded) |
 | `git_push` | push to bare `origin`; second push | non-fast-forward → `GIT_FAILED`, remote unchanged; missing upstream; detached HEAD | unknown remote; no force possible — argv asserted `["push",remote,branch]`; remote tip unchanged after rejected push | no refspec/flag field exists in schema |
-| `js_format_write` | exact pre/post byte diff; other files untouched | formatter exit ≠ 0 → `VALIDATION_FAILED`; timeout → `TIMEOUT` | `..`/symlink/absolute/`node_modules` rejection; 51 paths → `LIMIT_EXCEEDED` | backend constant → exact argv (`prettier --write --`); no backend/flag/config field in schema |
+| `js_format_write` | exact pre/post byte diff; other files untouched | formatter exit ≠ 0 → `VALIDATION_FAILED`; timeout → `TIMEOUT` | `..`/symlink/absolute/`node_modules` rejection; 51 paths → `LIMIT_EXCEEDED` | configured backend → exact argv (`prettier --write --`); no backend/flag/config field in schema |
+| companion config (`FD5`) | no file → defaults; `formatter: "biome"` → Biome argv; mid-session edit ignored | malformed JSON / unknown key / non-enum value → `PARSE_ERROR` at session start; foreign `ctx.cwd` → `INVALID_ARGUMENT` | config never yields a program/argv: every value maps through a fixed enum→builder table | `pi-nobash-companions.json` is the only file a companion reads; core `.pi/pi-nobash.json` parsing unchanged |
 | `py_format_write` | exact pre/post diff | as above | as above | argv exactly `["format","--",…paths]` |
 | templates | parse via `loadValidationConfig`; `run_validation` executes each check | malformed JSON → `PARSE_ERROR` | every check read-only — template scan test asserts no `--write`/`--fix`/`git add`/`install` in any `program`/`args` | `unit_file` uses verified `node_test` adapter only |
 | `js_lint_fix` / `py_lint_fix` | exact pre/post diff on safe-fixable fixture | exit ≠ 0; timeout | scope as formatters | no `--unsafe-fixes`/`--unsafe` in any argv (assert); schema has no mode field |
@@ -787,12 +867,13 @@ machinery.
   → `git add -u` (FD4). Bounded: it can never introduce an untracked file, so it
   cannot include something the model did not enumerate. `-A`/all remains excluded.
 - **A7-4 Python formatter backends beyond Ruff.** Default: **Ruff only**
-  (docs/stacks/python.md names it; Black would be a second constant + argv
-  builder). Add Black only on demonstrated demand.
+  (`python.formatter`/`python.linter` enums admit `ruff`; docs/stacks/python.md
+  names it). Adding Black = one enum member + one fixed argv builder; add only
+  on demonstrated demand.
 - **A7-5 Biome as default JS backend vs Prettier.** Default: **Prettier**
   (widest file-type coverage incl. `.md`/`.css`; Expo template already assumes
-  it). Biome stays a one-line switch (FD5). Revisit if a fixture project is
-  Biome-native.
+  it). Biome stays a config switch — `companions.javascript.formatter:
+  "biome"` (FD5). Revisit if a fixture project is Biome-native.
 - **A7-6 `js_dep_add` lifecycle-script escape hatch.** Default: **none**
   (`--ignore-scripts` always). If native-build packages become a real blocker
   in practice, the narrow remedy is a separate developer-invoked flow, not a
