@@ -8,10 +8,13 @@ changes.
 `pi-nobash` registers none of them — the package's `pi.extensions` manifest has a single
 entry — and every companion tool registers with `defaultActive: false`.
 
-**Status:** the source is written by the P0/P1 implementation run described in
+**Status:** the P0 companions are implemented and shipped in this directory —
+`process.ts` (the bounded fixed-argv runner), `config.ts` (developer-configured
+backend selection), the four Git mutation tools, `js_format_write`, and
+`py_format_write` — per
 [the companions implementation plan](https://github.com/afshinator/pi-nobash/blob/main/docs/plans/pi-nobash-companions-implementation-plan.md).
-Until then, this directory documents the intended layout and the load paths. Do not assume any
-tool listed here exists yet.
+The P1 tools (lint fixes, dependency changes, `expo_dep_add`) are planned, not
+written; the layout below marks them as such.
 
 **Where the guide lives.** [docs/stacks](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md)
 is the per-stack guide — which tools to select, which checks to configure, and which companion
@@ -40,11 +43,12 @@ will fail to resolve. Copy the whole repository, or install the companion from w
 ```text
 companions/
   README.md      this file
-  process.ts     execFixed — bounded fixed-argv runner (P0)
-  git/           git_create_branch, git_add, git_commit, git_push            (P0)
-  javascript/    js_format_write (P0); js_lint_fix, js_dep_add, js_dep_remove (P1)
-  python/        py_format_write (P0); py_lint_fix, py_dep_add, py_dep_remove (P1)
-  expo/          expo_dep_add                                                 (P1)
+  process.ts     execFixed — bounded fixed-argv runner                     (shipped)
+  config.ts      .pi/pi-nobash-companions.json loader + enum->argv builders (shipped)
+  git/           git_create_branch, git_add, git_commit, git_push            (shipped)
+  javascript/    js_format_write (shipped); js_lint_fix, js_dep_add, js_dep_remove (planned, P1)
+  python/        py_format_write (shipped); py_lint_fix, py_dep_add, py_dep_remove (planned, P1)
+  expo/          expo_dep_add                                                (planned, P1)
 ```
 
 ## Rules every companion tool follows
@@ -59,6 +63,10 @@ companions/
 - `defaultActive: false` plus a one-line `promptSnippet` and accurate `annotations`.
 - Unsupported operations return `CAPABILITY_GAP`; there is no generic runner, interpreter, or
   shell fallback anywhere in the set.
+- Errors are typed and stable: `PARSE_ERROR` from config loading, `INVALID_ARGUMENT` /
+  `PATH_OUT_OF_SCOPE` / `LIMIT_EXCEEDED` for out-of-scope input, `VALIDATION_FAILED` /
+  `GIT_FAILED` / `TIMEOUT` when the frozen backend fails or times out, and `CAPABILITY_GAP`
+  for operations the schema cannot express.
 
 The frozen per-tool contracts (schemas, invocations, effects, tests) are in the plan linked
 above; this file is the loading and layout reference only.
