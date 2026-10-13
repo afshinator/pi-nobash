@@ -1,14 +1,14 @@
 /**
- * The README ships inside the npm tarball. A relative link to a path that is not
- * in the `files` allowlist (for example `docs/…`) renders on GitHub and 404s on
- * the npm package page, so require every relative README link to point at a
- * shipped path — otherwise use an absolute URL.
+ * Markdown that ships inside the npm tarball — the root README and any shipped
+ * docs such as `companions/README.md` — must not link relatively to a path
+ * outside the `files` allowlist. A relative link to an unshipped path (for
+ * example `docs/…`) renders on GitHub and 404s on the npm package page, so use
+ * an absolute URL for anything not shipped.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const README = readFileSync("README.md", "utf8");
 const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
 	files: string[];
 };
@@ -16,16 +16,40 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
 const isShipped = (target: string): boolean =>
 	pkg.files.some((entry) => target === entry || target.startsWith(`${entry}/`));
 
-test("README relative links must point at files shipped by the files allowlist", () => {
-	const bad = [...README.matchAll(/\]\(([^)]+)\)/g)]
-		.map((m) => (m[1] as string).trim())
-		.filter((target) => {
-			if (/^(https?:|mailto:|#)/.test(target)) return false; // absolute or anchor
-			return !isShipped(target.split("#")[0] as string);
-		});
+/** Markdown that ships: the root README plus every `.md` under a shipped directory. */
+function shippedMarkdown(): string[] {
+	const out = ["README.md"];
+	for (const entry of pkg.files) {
+		if (entry === "README.md") continue;
+		try {
+			for (const dirent of readdirSync(entry, {
+				recursive: true,
+				withFileTypes: true,
+			})) {
+				if (dirent.isFile() && dirent.name.endsWith(".md"))
+					out.push(`${dirent.parentPath}/${dirent.name}`);
+			}
+		} catch {
+			// not a directory, or not present — nothing to check under it
+		}
+	}
+	return out;
+}
+
+test("shipped markdown must not link relatively to unshipped paths", () => {
+	const bad: string[] = [];
+	for (const file of shippedMarkdown()) {
+		const text = readFileSync(file, "utf8");
+		for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
+			const target = (match[1] as string).trim();
+			if (/^(https?:|mailto:|#)/.test(target)) continue; // absolute or anchor
+			if (!isShipped(target.split("#")[0] as string))
+				bad.push(`${file} -> ${target}`);
+		}
+	}
 	assert.deepEqual(
 		bad,
 		[],
-		`relative README links must be shipped (add the path to package.json "files") or absolute: ${bad.join(", ")}`,
+		`shipped markdown relative links must point at shipped paths or use absolute URLs: ${bad.join(", ")}`,
 	);
 });

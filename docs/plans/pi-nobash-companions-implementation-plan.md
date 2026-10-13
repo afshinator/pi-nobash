@@ -690,15 +690,20 @@ the server (smallest-design rule).
 4. **No automatic exposure, restated.** Docs keep the rule that nothing is
    active until named in `--tools`/`defaultTools`/SDK selection; the example
    launch lines list companion tool names explicitly.
-5. **`companions/README.md`** (ships with M1): what a companion is, the two
-   load paths (`-e ./companions/<name>` from a checkout; copy into
-   `.pi/extensions/` with the `../src/` import adjustment), the per-tool
-   contracts, and the statement that companions are never loaded by installing
-   core.
+5. **`companions/README.md`** (already written and shipped): what a companion is,
+   the two supported load paths (`pi install ./companions/<name>`, or
+   `pi -e <repo>/companions/<name>` — both loaded in place), the warning that a
+   single companion directory must not be copied out of the tree (its relative
+   `src/` imports break), and the statement that companions are never loaded by
+   installing core. Any link from it into `docs/` uses an absolute URL, since it
+   ships and `docs/` does not.
 6. **Migration of the README's "Shared extensions" section** (`docs/stacks/
-   README.md`): after P0, point the git table at `companions/git` as the
-   maintained reference implementation while keeping the "register your own"
-   instructions intact (developers may still hand-roll).
+   README.md`): after P0, point the git table at `companions/git` and keep the
+   "register your own" note (developers may still hand-roll). Replace the
+   guide's restated schemas with links to `companions/` and this plan — the guide
+   says *what and when*; the plan and the source are the single source of truth
+   for schemas (they drifted once already: `switchToBranch` vs `switchTo`, and an
+   `all`/`-A` mode this plan excludes).
 7. **Links resolve:** all new doc links verified by extending the existing
    readme-links test pattern to `docs/stacks/*.md` (test listed in A6).
 

@@ -9,9 +9,16 @@ changes.
 entry — and every companion tool registers with `defaultActive: false`.
 
 **Status:** the source is written by the P0/P1 implementation run described in
-[the companions implementation plan](../docs/plans/pi-nobash-companions-implementation-plan.md).
+[the companions implementation plan](https://github.com/afshinator/pi-nobash/blob/main/docs/plans/pi-nobash-companions-implementation-plan.md).
 Until then, this directory documents the intended layout and the load paths. Do not assume any
 tool listed here exists yet.
+
+**Where the guide lives.** [docs/stacks](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md)
+is the per-stack guide — which tools to select, which checks to configure, and which companion
+(if any) to load. This directory is the code those guides point at: **`docs/stacks` is
+documentation, `companions` is source.** `docs/` is not part of the npm package, which is why
+the guide is linked out to GitHub while the load paths and layout below live here, inside the
+shipped package.
 
 ## Load paths — keep the tree intact
 

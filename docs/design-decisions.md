@@ -35,6 +35,43 @@ companion extensions, plus the three levers that decide any one agent's toolset:
 ![Ecosystem: docs/stacks recipes feed the three developer levers, which produce a configured check file, the selected core tools, native Pi tools, and loaded companion extensions, whose union is the agent's toolset; a bash call is blocked and an unmatched request is a CAPABILITY_GAP](./pi-nobash-ecosystem.svg)
 
 
+## Repository layout: `docs/stacks/` and `companions/`
+
+Two directories cover the same territory and are often mistaken for duplicates. They are not:
+they sit on opposite sides of the packaging boundary and hold different kinds of artifact.
+
+| | `docs/stacks/` | `companions/` |
+|---|---|---|
+| Kind | prose guide (Markdown) | source code (TypeScript + tests) |
+| Ships in the npm tarball | **no** (`docs/` is excluded) | **yes** (added to `files`, plan FD2) |
+| Covers | all three levers — tool selection, `.pi/pi-nobash.json` checks, which extension to load — for TypeScript (Node + Expo), Python, Rust, Go | only the *mutation* tools, for TypeScript, Python, Expo |
+| Audience | an adopter deciding what to configure | an adopter loading and running a companion |
+
+Why both exist:
+
+- **Prose vs source.** One is read; the other is loaded, type-checked, linted, and tested.
+- **Shipped vs not.** The decisive reason. `docs/` never reaches an npm consumer, so anything a
+  companion user needs *at install time* — load paths, the layout, the no-single-copy rule —
+  must live under `companions/`, which is why `companions/README.md` repeats a little of the
+  guide. The reverse is also true: a shipped file must not link relatively into `docs/`, which
+  is why `companions/README.md` links the guide by absolute GitHub URL (enforced by
+  `tests/unit/readme-links.test.ts`).
+- **Coverage differs.** The guide spans stacks with no companions (Rust, Go) and non-mutation
+  needs (read-only checks, native tools); `companions/` implements only mutating tools.
+- **Lifecycle differs.** The guide predates the companions; the companions began as a README.
+
+**The overlap to watch.** Both describe the same Git/formatter/dependency tools, and they drifted
+once already (`switchToBranch` vs `switchTo`; an `all`/`-A` staging mode the plan excludes). The
+rule that keeps them coherent: **`docs/stacks` says what and when; the plan and the source are the
+single source of truth for schemas.** The A5/M4 pass replaces the guide's schema tables with
+links to `companions/` and the plan rather than restating them.
+
+Alternatives considered and rejected: folding the guides into `companions/*/README.md` (splits
+the guide four ways, strands Rust/Go, and the shipped README already links to `docs/stacks/`);
+renaming both for symmetry (cosmetic); dropping `companions/` and leaving every project to write
+its own mutation tools (the pre-D2 world the companions exist to replace).
+
+
 ## Implementation decisions and tradeoffs
 
 Each decision that is not in the original product or technical specification is recorded in
