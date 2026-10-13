@@ -1,0 +1,760 @@
+# Companions implementation plan (task-plan-4)
+
+**Status:** Plan for review — no companion code is implemented by this run.
+**Inputs:** [repository inventory A1](./pi-nobash-repository-inventory.md) (facts,
+paths, primitives — reused by reference, not copied here),
+[companions handoff](../pi-nobash-stack-companions-handoff-2026-10-11.md) §3–§9,
+[product spec v1.7.3](../pi-nobash-product-spec-v1.7.3.md) (G1–G7, AC1–AC11),
+[amendments](../pi-nobash-technical-spec-amendments.md) A1–A14,
+[stack docs](../stacks/README.md), [validation](../validation.md),
+[tool reference](../tool-reference.md), [replacing Bash](../replacing-bash.md).
+
+**Outputs owned by this plan:** companion source layout under `companions/`
+(proposed; not yet written), check templates in `docs/stacks/examples/` (written
+by this run), and the P0/P1 rows in `docs/ROADMAP.md`.
+
+---
+
+## Governing boundary
+
+The model chooses a narrow, permitted operation with bounded typed arguments;
+trusted code implements it via one fixed process invocation. No tool accepts a
+program, executable, command, argv, script, entrypoint, or user-supplied flag
+field. A missing operation returns `CAPABILITY_GAP` (via the `ToolError`
+envelope, A5) — never a shell, interpreter, generic runner, or model-authored
+config. Every companion tool registers `exposure: "direct"`,
+`defaultActive: false` (A12), a one-line `promptSnippet`, and accurate
+annotations (A11). Companion check templates are developer-owned and read once
+at session start (A10); no mutation command (`--fix`, `--write`, `git add`,
+dependency changes) ever appears in `.pi/pi-nobash.json` (D6/PD6). Amendments
+D1–D7 (handoff §1) are honored throughout and mapped in the Frozen decisions.
+
+---
+
+## Goal reconciliation
+
+Every P0/P1 item names its goal, acceptance criterion, and the developer lever
+it extends. Any item serving no goal is dropped from the plan.
+
+| Item | Goal(s) | AC | Lever |
+|---|---|---|---|
+| `git_create_branch` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `git_add` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `git_commit` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `git_push` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `js_format_write` | G2, G4 | AC6, AC7 | Companion extension |
+| `py_format_write` | G2, G4 | AC6, AC7 | Companion extension |
+| `.pi/pi-nobash.json` templates (`docs/stacks/examples/`) | G2, G5 | AC6, AC10 | Checks configuration |
+| `js_lint_fix` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `py_lint_fix` | G2, G4, G6 | AC6, AC7, AC9 | Companion extension |
+| `js_dep_add`, `js_dep_remove` | G2, G4 | AC6, AC7 | Companion extension |
+| `expo_dep_add` | G2, G4 | AC6, AC7 | Companion extension |
+| `py_dep_add`, `py_dep_remove` | G2, G4 | AC6, AC7 | Companion extension |
+| A5 documentation relabeling | G5, G6 | AC1, AC9 | Documentation (no tool) |
+
+Rationale in one line each: the Git mutations and formatters close the recorded
+`git`/edit workloads (spec §8) as typed operations (G2) with defined effects
+(G4); templates are the config-only half of the test/typecheck/lint coverage
+(G5); lint fixes and dependency tools close the remaining frequent mutation
+workloads while keeping every unsupported operation a visible gap (G6). The A5
+doc pass is what makes adoption honest (G5) without widening any toolset.
+
+---
+
+## Frozen decisions
+
+Each: decision, rationale, rejected alternatives. Amendment codes D1–D7 refer
+to the handoff §1.
+
+**FD1 — Companion layout and loading mechanism (D3, D2).**
+Companions live in-repo under `companions/` as individually loadable reference
+extensions:
+
+```
+companions/
+  README.md            # copy/install instructions, load paths
+  process.ts           # execFixed: the bounded fixed-argv runner (modeled on src/git/exec.ts)
+  git/
+    index.ts           # registerGitMutationTools(pi)
+    create-branch.ts   # one tool per module, mirroring src/git/tools.ts conventions
+    add.ts
+    commit.ts
+    push.ts
+  javascript/
+    index.ts           # registerJsTools(pi): js_format_write (P0); js_lint_fix, js_dep_add, js_dep_remove (P1)
+  python/
+    index.ts           # registerPythonTools(pi): py_format_write (P0); py_lint_fix, py_dep_add, py_dep_remove (P1)
+  expo/
+    index.ts           # registerExpoTools(pi): expo_dep_add (P1)
+```
+
+Companions import shared primitives from `../src/` by relative path
+(`src/git/exec.ts`, `src/git/rev.ts`, `src/path-policy.ts`, `src/errors.ts`,
+`src/constants.ts`) plus `companions/process.ts` for non-git processes. One
+tool per module; one `registerX(pi)` per companion `index.ts`; no side effects
+at import time (A1's entrypoint pattern). Loading: developer runs
+`pi -e ./pi-nobash -e ./companions/git …` or copies the directory into
+`.pi/extensions/` (adjusting the `../src/` imports to the installed package
+path — documented in `companions/README.md`).
+
+*Rationale:* zero duplication of the audited primitives (Ponytail), and A1 §2.3
+proves repo-root `companions/` is **not** auto-discovered by Pi, so the layout
+itself enforces "installing core loads no companion."
+*Rejected:* separate npm packages per companion (D2 explicitly defers; a
+published package invites auto-activation churn); nested `pi` manifests inside
+`companions/*/package.json` (only honored under scanned extension dirs — a
+second loading story to test for no gain); duplicating `path-policy.ts` into
+each companion (drift from the audited implementation).
+
+**FD2 — Distribution: GitHub-only companions; core stays single-entry.**
+`companions/` is reference source on GitHub. The npm tarball `files` allowlist
+(`assets`, `extensions`, `src`, `README.md`) is **not** extended; the root
+`package.json` `pi.extensions` manifest keeps exactly one entry
+(`./extensions/pi-nobash.ts`, A14). A developer installing `pi-nobash` from npm
+gets no companion code and no companion tool.
+
+*Rationale:* D3 (loading core must not expose companions) is enforced
+structurally — a tarball cannot ship what it does not contain, and the
+single-entry manifest cannot reference what does not exist in it.
+*Rejected:* adding `companions` to `files` (ships code npm consumers cannot
+load without edits and tempts manifest-listing them — the auto-exposure A12
+forbids); publishing `pi-nobash-git` etc. (new release surface, D2 defers it).
+
+**FD3 — `git_push` semantics.**
+`git_push { remote?: string }` pushes the **current** branch to a **configured**
+remote with no refspec, no flags, and no force:
+
+1. Resolve the current branch via `git rev-parse --abbrev-ref HEAD`; detached
+   HEAD → `GIT_FAILED` ("detached HEAD; switch to a branch first").
+2. Default remote `origin`; a model-supplied `remote` must match an existing
+   remote (`git remote` list), else `INVALID_ARGUMENT`. No remote creation.
+3. If the branch has no upstream, fail with `GIT_FAILED` naming the missing
+   upstream; the developer runs `git push --set-upstream` once by hand. (No
+   `setUpstream` schema field in P0 — see A7-2.)
+4. Invocation: `git push <remote> <branch>` — branch name only, never
+   `<src>:<dst>`, never `--force`/`--force-with-lease`, never tags, never
+   wildcards. Non-fast-forward rejection surfaces as `GIT_FAILED` with git's
+   stderr.
+
+*Rationale:* push is the only operation landing on shared state (handoff §3
+guardrails); narrowest contract that still completes the commit→push workflow.
+*Rejected:* `setUpstream` schema field (P0 — extra argv surface; A7-2 keeps it
+as an open default); arbitrary refspec or `--force` variants (forbidden by the
+handoff); remote creation (a configuration mutation, not a push).
+
+**FD4 — Staging modes.**
+`git_add { paths: string[] }` stages **explicit paths only**:
+`git add -- <validated paths>`. No `trackedOnly`, no `all`, no `-A`, no `-u`,
+no pathspec globs, no `.gitignore`-defeating modes in P0. A request to "stage
+everything" is a `CAPABILITY_GAP` the model reports; the developer stages by
+hand or a later, separately selected tool adds it.
+
+*Rationale:* handoff §3: "Document/implement explicit-path semantics first";
+explicit paths pair with the shipped `git_status`/`git_diff` so the model
+inspects exactly what it stages. One mode = one invocation = one test surface.
+*Rejected:* `mode: "explicit"|"tracked"|"all"` enum (ships the `-A` granularity
+that "commits something nobody looked at" before need is demonstrated);
+`trackedOnly` as a boolean field (same, smaller risk but still unrequested —
+A7-3 records it as the first upgrade if need appears).
+
+**FD5 — Formatter selection per stack.**
+One fixed formatter backend per stack companion, chosen by the developer in
+trusted code (a one-line constant at the top of the module), never a schema
+field:
+
+- `javascript/format-write.ts`: `const FORMATTER: "prettier" | "biome" = "prettier"`
+- `python/format-write.ts`: fixed `ruff` (no constant needed — Ruff is the only
+  supported backend; see A7-4 for adding others)
+
+Invocations: Prettier `npx prettier --write -- <files>`; Biome
+`npx biome format --write -- <files>`; Ruff `ruff format -- <files>`.
+Backend selection lives in the companion file because the developer who copies
+the companion is the same person who chose the project's formatter; a schema
+field would let the model pick an executable path/flag set (PD6 violation).
+
+*Rationale:* docs/stacks/typescript.md names Prettier and Biome as the two
+established choices; Ruff is the docs' sole Python formatter. Smallest honest
+switch: one constant, two fixed argv builders.
+*Rejected:* `backend: "prettier" | "biome"` schema field (model-supplied
+backend selection = arbitrary-executable-adjacent surface); one companion file
+per backend (two files to keep in sync for one line of difference); config-file
+driven selection (new machinery the product forbids: "no model-authored config"
+— and a developer config read for a formatter name is machinery, not need).
+
+**FD6 — Initial package-manager coverage.**
+- Checks templates (config, P0): npm, pnpm (TS/Node); Expo via npx; Python via
+  venv/PATH and uv. Yarn/bun/Poetry/pipenv remain documented transforms in
+  docs/stacks (change `program`/`args` only), not separate template files.
+- Lint fixes (P1): the tool spawns the project-local binary the same way the
+  formatter does — `npx biome check --write`/`npx eslint --fix` per the
+  `LINTER` constant (default `biome`), `ruff check --fix` for Python. Safe fixes
+  only; no `--unsafe-fixes` (separate tool if ever justified — P2).
+- Dependency tools (P1): **npm** for `js_dep_add`/`js_dep_remove`
+  (`npm install`/`npm uninstall`, always with `--ignore-scripts`), **expo** for
+  `expo_dep_add` (`npx expo install`), **uv** for `py_dep_add`/`py_dep_remove`
+  (`uv add [--dev]` / `uv remove`). One backend each, fixed argv, no
+  model-supplied flags. pnpm/yarn/bun/Poetry/pipenv variants are
+  `CAPABILITY_GAP` until a separately reviewed backend constant is added.
+- `run_validation` target adapters: unchanged — `node_test` is the only
+  verified adapter (A7); templates use `targets.mode: "none"` everywhere else.
+
+*Rationale:* repo itself uses npm + uv-era Python tooling; handoff §3 says
+"begin with one well-supported workflow" for Python deps. Each additional
+variant is a new fixed-argv builder plus lifecycle analysis — added only on
+need.
+*Rejected:* shipping every manager variant up front (untestable surface,
+handoff explicitly warns); `pip install` as a Python dep tool (no lockfile
+semantics — the mutation is unreviewable); `npx <pkg>` as a dep tool (npx
+fetches and runs arbitrary package code — a generic runner by another name).
+
+**PD7/D6 restated — no generic execution route.** No companion reads
+`.pi/pi-nobash.json`, no companion exposes a command/argv/script field, no
+package-manager `run`/`exec` script invocation exists in any companion
+(`npm install` lifecycle scripts are disabled with `--ignore-scripts`), and
+linter fixers get enumerated safe-fix modes only. The proving tests are in A6
+(`no-command-field` rows + `core-no-companion-exposure`).
+
+---
+
+## Ponytail assessment (per decision)
+
+| Decision | Smallest complete design | Deliberately skipped |
+|---|---|---|
+| FD1 layout | 4 dirs, 1 shared runner module, relative imports into audited `src/` | Vendored copies, per-companion `package.json`, build step |
+| FD2 distribution | No manifest/files change at all | npm publication, `files` extension |
+| FD3 push | Resolve branch → validate remote → `git push <remote> <branch>` | `--set-upstream` field, refspec, force variants, remote creation |
+| FD4 staging | `git add -- paths` only | `trackedOnly`/`all` modes, pathspec globs |
+| FD5 formatters | One-line backend constant + two argv builders per stack | Schema field, config file, formatter auto-detection, plugins |
+| FD6 managers | npm/expo/uv only | yarn, bun, pnpm dep tools; Poetry/pipenv |
+| Shared runner | `companions/process.ts` (~40 lines, modeled on `execGit`) | New dependency (execa etc.) — stdlib `child_process` only |
+| Schema bounds | Reuse `src/constants.ts` caps; add `MAX_FORMAT_PATHS = 50` | Per-tool configurable limits |
+
+New dependencies: **none.** Companions use `node:child_process`, `typebox`
+(peer), and `@earendil-works/pi-coding-agent` (peer). Prettier/Biome/Ruff/
+expo-CLI/uv/npm are pre-existing project tooling resolved via `npx`/PATH — not
+dependencies of this package.
+
+---
+
+## (A2) P0 implementation plan
+
+Shared module first, then per-tool contracts. All tools: fixed argv, no shell,
+per-stream 100 KB output caps with `truncated` flag, AbortSignal support
+(cancellation kills the child), fixed per-tool timeouts, `ToolError` envelope,
+`details` shapes frozen below (A6-style contract). All tools annotate
+`readOnlyHint: false` (they mutate); `destructiveHint: true` only on `git_push`
+(lands on shared state) — plain mutations stay honest without fear-mongering.
+
+### Shared: `companions/process.ts`
+
+`execFixed(program, args, cwd, opts?)` — `spawn(program, args, { shell: false })`,
+100 KB per-stream accumulation + `truncated`, timeout via
+`AbortSignal.timeout(opts.timeoutMs)` wired to `child.kill()`, resolves
+`{ code, stdout, stderr, truncated, timedOut }`. Non-zero exit is returned, not
+thrown — callers decide `GIT_FAILED` vs `VALIDATION_FAILED`-style codes.
+Mirrors `src/git/exec.ts`; ~40 lines, stdlib only.
+
+### P0-1 `git_create_branch` — `companions/git/create-branch.ts`
+
+- **Schema (TypeBox):**
+  ```ts
+  Type.Object({
+    name: Type.String({ description: "new branch name" }),
+    startPoint: Type.Optional(Type.String({ description: "existing commit or branch to branch from" })),
+    switchTo: Type.Optional(Type.Boolean({ default: true })),
+  })
+  ```
+  No other fields. Bounds: `name` ≤ 255 chars.
+- **Validation:** branch name against the same conservative charset as
+  `validateCommitRevision` (no whitespace, no leading `-`, no `..`, no `@{`,
+  no `~`/`^`/`:`/`\`, reject `refs/`-escape tricks) plus Git refname rules;
+  reject if the branch already exists (`git rev-parse --verify --quiet refs/heads/<name>`);
+  `startPoint`, if present, goes through `validateCommitRevision` (must resolve
+  to a commit). Name/startPoint never placed after `--`.
+- **Invocation:** `switchTo` (default true): `git switch -c <name> [<startPoint>]`;
+  otherwise `git branch <name> [<startPoint>]`. Two fixed argv shapes.
+- **Effects/limits:** creates one ref in the local repo; nothing staged,
+  committed, or pushed; working tree untouched (create from non-HEAD start point
+  with dirty tree is left to git's own refusal, surfaced as `GIT_FAILED`).
+  Timeout 30 s. Reused: `execGit`, `validateCommitRevision`.
+- **`details` (frozen):** `{ branch: string; switchedTo: boolean; startPoint?: string }`.
+- **Tests (A6 ref `git_create_branch`):** happy create+switch, create without
+  switch, from `startPoint`; failures: duplicate name, invalid name (`-b`, `..`,
+  whitespace), unresolvable startPoint, detached-HEAD create is allowed (branch
+  from HEAD) but switch from detached is a plain switch — covered in fixtures.
+
+### P0-2 `git_add` — `companions/git/add.ts`
+
+- **Schema:**
+  ```ts
+  Type.Object({
+    paths: Type.Array(Type.String(), { minItems: 1, maxItems: 100 }),
+  })
+  ```
+- **Validation:** every path via `validateGitPaths`/`validateWorkspacePath`
+  semantics (A1 table): relative to repo root, no absolute paths, no `..`
+  traversal, no NUL, no option-like final segments, and no path whose first
+  path segment begins with `:` (pathspec magic — `:(glob)`, `:!`, `:(top)`) →
+  `INVALID_ARGUMENT`; ≤ 100 paths.
+- **Invocation:** `git add -- <paths…>` on the session cwd, with the child
+  environment set to `GIT_LITERAL_PATHSPECS=1` (`execFixed`/`execGit` merge
+  the var into `spawn`'s `env`). `--` ends option parsing but does **not**
+  disable pathspec magic; `GIT_LITERAL_PATHSPECS=1` is the mechanism that
+  makes every path literal — no glob/pathspec expansion, no `:!` exclusions.
+- **Effects/limits:** index-only mutation of the named paths; new untracked
+  files named explicitly are staged (that is the point of explicit paths);
+  `.gitignore`d files refuse per git, surfaced as `GIT_FAILED`. Timeout 30 s.
+- **`details` (frozen):** `{ staged: string[]; truncated: boolean }` — parsed
+  from `git diff --cached --name-only` after the add (bounded to the same
+  100-path / 100 KB caps).
+- **Tests:** stages exactly the named files (byte-exact index diff via
+  `git diff --cached --name-only` before/after); untracked explicit file staged;
+  renamed pair staged as rename; failures: `..`, absolute, symlink-escape,
+  option-like segment, ignored file, nonexistent path.
+
+### P0-3 `git_commit` — `companions/git/commit.ts`
+
+- **Schema:**
+  ```ts
+  Type.Object({
+    message: Type.String({ minLength: 1, maxLength: 4000 }),
+  })
+  ```
+- **Validation:** non-empty staged index required — pre-check
+  `git diff --cached --name-only` (empty → `INVALID_ARGUMENT` "nothing staged;
+  stage paths with git_add first"). The tool never stages, never `-a`, never
+  amends.
+- **Invocation:** `git commit -m <message>` — message as a single argv element;
+  no `-m` repetition games, no `--no-verify`, no `--author`, no dates.
+- **Effects/limits:** creates one commit on the current branch from the staged
+  index. Repository hooks (`pre-commit`, `commit-msg`) run — a documented,
+  deliberate effect (repo-trusted code; no bypass flag is offered). GPG/SSH
+  signing follows repo config. Hook or signing failure → `GIT_FAILED` with
+  stderr. Timeout 120 s (hooks can be slow). Commit-message body via `\n` in the
+  single string is allowed (git handles it; no shell involved).
+- **`details` (frozen):** `{ hash: string; shortHash: string; branch: string|null;
+  filesCommitted: number; message: string }` (hash from `git rev-parse HEAD`
+  post-commit).
+- **Tests:** commit of staged pair → exactly one commit, correct tree, message
+  byte-equal, filesCommitted correct; empty index rejected **before** invoking
+  git; hook failure surfaces as `GIT_FAILED` (fixture repo with failing
+  `pre-commit`); no-auto-stage proof: modified-but-unstaged file does not appear
+  in the commit.
+
+### P0-4 `git_push` — `companions/git/push.ts`
+
+Contract frozen in FD3. Schema:
+
+```ts
+Type.Object({
+  remote: Type.Optional(Type.String({ maxLength: 100 })),
+})
+```
+
+- **Invocation (fixed sequence):**
+  1. `git rev-parse --abbrev-ref HEAD` → current branch (detached → `GIT_FAILED`)
+  2. if `remote` given: `git remote` list must contain it, else `INVALID_ARGUMENT`
+  3. `git rev-parse --abbrev-ref --symbolic-full-name <branch>@{upstream}` —
+     missing upstream → `GIT_FAILED` "no upstream for <branch>; developer must
+     run git push --set-upstream once"
+  4. `git push <remote=origin> <branch>`
+- **Effects/limits:** mutates shared remote state — `destructiveHint: true`.
+  Non-fast-forward/rejected push = `GIT_FAILED` with git's stderr (never
+  retried with force). No refspec, no force, no tags, no remote creation, no
+  URL in argv ever. Timeout 300 s (network). Stdout/stderr caps as usual.
+- **`details` (frozen):** `{ remote: string; branch: string; pushed: true }`.
+- **Tests (throwaway bare repo as `origin`):** happy push of a local commit;
+  push of second commit; non-fast-forward (remote advanced) fails with
+  `GIT_FAILED` and remote unchanged; no-force proof: rejected push leaves remote
+  tip unchanged and tool emitted no force flag (arg-builder unit test asserts
+  argv is exactly `["push", remote, branch]`); unknown remote rejected; detached
+  HEAD rejected; missing upstream rejected.
+
+### P0-5 `js_format_write` — `companions/javascript/format-write.ts`
+
+- **Schema:**
+  ```ts
+  Type.Object({
+    paths: Type.Array(Type.String(), { minItems: 1, maxItems: 50 }),
+  })
+  ```
+  (`MAX_FORMAT_PATHS = 50` in the companion; no other fields — no backend, no
+  flags, no config path.)
+- **Validation:** every path via `validateWorkspacePath` (realpath
+  containment, `..`/symlink-escape/absolute rejection), must exist as a regular
+  file, extension must be one of the backend's handled set (Prettier:
+  `.ts .tsx .js .jsx .json .css .md …` — fixed list in the module; Biome: its
+  supported set). Unknown extension → `INVALID_ARGUMENT` before spawn.
+- **Invocation (FD5):** Prettier default —
+  `npx prettier --write -- <resolved paths…>`; Biome —
+  `npx biome format --write -- <resolved paths…>`. Backend via the module
+  constant. Spawned by `execFixed`, `cwd` = session cwd, shell false.
+- **Effects/limits:** rewrites the named files in place only. No config file is
+  read *by the tool* beyond the formatter's own project config discovery
+  (`prettier.config`/`biome.json` — documented; the model cannot point the tool
+  at another config). Timeout 120 s; output truncated at 100 KB/stream;
+  per-file results parsed from formatter stdout where stable (`prettier` lists
+  files) — `details` reports `{ formatted: string[]; truncated: boolean }` with
+  a conservative parse (unparseable output still returns exit-code-based
+  success/failure).
+- **Tests:** exact pre/post byte diff on a fixture file with known
+  unformatted content (diff is exactly the formatted form, other files
+  untouched); out-of-scope path rejected (`..`, symlink, absolute); option-like
+  filename rejected; `node_modules` path inside workspace rejected (fixed deny
+  list: `node_modules`, `.git`, `dist`, `build`); timeout produces `TIMEOUT`
+  with partial effects documented; backend constant produces exactly the frozen
+  argv (arg-builder unit test).
+
+### P0-6 `py_format_write` — `companions/python/format-write.ts`
+
+Same shape as P0-5 with fixed Ruff backend:
+
+- **Schema:** identical `{ paths: string[] }`, 1..50.
+- **Validation:** `validateWorkspacePath`, regular file, extension
+  `.py`/`.pyi`.
+- **Invocation:** `ruff format -- <resolved paths…>` via `execFixed` (Ruff
+  format writes by default; `--` separates validated paths). `ruff` resolved
+  from PATH/project venv — same interpreter assumption as the python-venv
+  checks template; documented in the module header.
+- **Effects/limits:** rewrites named files per Ruff format semantics; project
+  `pyproject.toml` `[tool.ruff]` config is honored by Ruff itself (line length
+  etc. — the tool passes no formatting flags). Timeout 60 s; same truncation
+  and `details` shape as P0-5.
+- **Tests:** exact pre/post diff fixture; scope rejections as P0-5; argv
+  exactly `["format", "--", ...paths]`; failure codes as frozen for all
+  formatters (Prettier, Biome, Ruff): non-zero exit returns an `isError` result
+  with code `VALIDATION_FAILED` (A5 semantics); timeout returns `TIMEOUT`.
+
+### P0-7 Check templates (`docs/stacks/examples/`) — written by this run
+
+Five copyable, valid-JSON, Biome-clean `.pi/pi-nobash.json` starting points.
+These are **configuration** (lever 2), not tools: every check is read-only, all
+use `targets.mode: "none"` except the `node_test` file-target check, and no
+template contains a mutating command.
+
+| File | Stack/variant | Assumptions (stated per FD6) |
+|---|---|---|
+| `ts-node-npm.json` | Node/web, npm | `package.json` scripts `test`, `typecheck`, `lint`, `format:check`; tests via `node:test`; `format:check` is a non-mutating formatter check |
+| `ts-node-pnpm.json` | Node/web, pnpm | same scripts; pnpm on PATH |
+| `ts-expo-npm.json` | Expo/React Native, npm | jest-expo `test` script accepting `--ci`; `expo`, `prettier`, `expo-doctor` via npx; no `bundle` check (slow, writes a build dir — developer adds it per docs/stacks/typescript.md) |
+| `python-venv.json` | Python, venv/PATH | `pytest`, `mypy`, `ruff`, `python -m build` on PATH in the agent's environment |
+| `python-uv.json` | Python, uv | `uv` on PATH; tools run inside the project environment via `uv run` |
+
+Common assumptions for all five: file is placed at the **workspace root**
+`.pi/pi-nobash.json`; `cwd: "."` is the workspace root; timeouts are generous
+defaults to be tuned per repo; check names (`unit`, `typecheck`, `lint`,
+`format_check`, `unit_file`, `doctor`, `build`) are the stable vocabulary the
+agent sees. Yarn/bun/Poetry/pipenv variants: derive by changing `program`/`args`
+per the tables in `docs/stacks/{typescript,python}.md` — not shipped as files
+(FD6). Verified: `npx biome check docs/stacks/examples/` → clean; all five are
+parseable by `src/config.ts`'s `ValidationCheck` shape.
+
+### P0 milestones (ordered slices)
+
+1. **M1 — Shared runner + Git core:** `companions/process.ts`,
+   `companions/git/{index,create-branch,add,commit}.ts` + registration test +
+   git fixtures. Proves the companion loads alongside core with zero
+   `defaultActive` tools active.
+2. **M2 — `git_push`:** `companions/git/push.ts` + bare-remote fixtures
+   (upstream, rejection, no-force).
+3. **M3 — Formatters:** `companions/javascript/format-write.ts`,
+   `companions/python/format-write.ts` + byte-diff fixtures.
+4. **M4 — Templates + docs:** templates (done — this run), A5 relabeling of
+   `docs/stacks/*.md` links to the companions and templates.
+
+Each slice: `npm run typecheck && npm test && npx biome check .` green before
+the next.
+
+---
+
+## (A3) P1 plan — lint fixes and dependency mutations
+
+All P1 tools reuse the P0 skeleton (`execFixed`, `validateWorkspacePath`,
+envelope, bounds). Safe-mode-first, fixed backends, no model flags.
+
+### P1-1 `js_lint_fix` — `companions/javascript/lint-fix.ts`
+
+- **Schema:** `{ paths: string[] }` (1..50), same validation as P0-5.
+- **Invocation (backend constant `LINTER: "biome" | "eslint" = "biome"`):**
+  Biome: `npx biome check --write -- <paths>` (safe fixes only — Biome's
+  `--write` applies safe fixes; unsafe require `--unsafe`, which is never
+  emitted). ESLint: `npx eslint --fix -- <paths>` (safe fixes by default).
+- **Modes:** safe only. Unsafe fixes are a **separate, not-yet-designed** tool
+  (`js_lint_fix_unsafe` candidate, P2) — never a flag on this one (handoff:
+  "review safe/unsafe modes separately").
+- **Lifecycle/side effects:** none beyond file rewrites — `biome`/`eslint`
+  binaries do not run project scripts, no network, no lockfile. Config
+  discovery (`biome.json`/`eslint.config.js`) is the formatter's own; ESLint
+  config is project-controlled *code* executed by ESLint — a documented
+  trusted-repo effect, same class as test runners (spec §4.3).
+- **`details`:** `{ fixed: string[]; remainingIssues: boolean; truncated: boolean }`
+  (from linter output; conservative parse).
+- **Never via `run_validation`:** the `lint` check stays report-mode; a template
+  containing `--write`/`--fix` fails a template-lint test (A6).
+
+### P1-2 `py_lint_fix` — `companions/python/lint-fix.ts`
+
+- **Schema:** `{ paths: string[] }` (1..50), `.py`/`.pyi`.
+- **Invocation:** `ruff check --fix -- <paths>` — safe fixes only; the module
+  never emits `--unsafe-fixes`. (Ruff's default `--fix` applies safe fixes.)
+- **Side effects:** file rewrites only; no network, no scripts. Ruff config
+  discovery from `pyproject.toml`/`ruff.toml` — documented.
+- **`details`:** as P1-1.
+
+### P1-3 `js_dep_add` / P1-4 `js_dep_remove` — `companions/javascript/dep.ts`
+
+- **Schema:**
+  ```ts
+  // js_dep_add
+  Type.Object({
+    packages: Type.Array(Type.String(), { minItems: 1, maxItems: 20 }),
+    dev: Type.Optional(Type.Boolean()),
+  })
+  // js_dep_remove
+  Type.Object({ packages: Type.Array(Type.String(), { minItems: 1, maxItems: 20 }) })
+  ```
+- **Package-name validation (the load-bearing control):** npm name grammar —
+  scope `@scope/name` or bare name, lowercase, charset `[a-z0-9._-]`, length
+  ≤ 214, no leading `.`/`-`, **no version specifiers, ranges, URLs, git
+  specifiers, or aliases** (`pkg@version`, `pkg@next`, `github:user/repo`,
+  `npm:pkg@ver` → `INVALID_ARGUMENT`). The tool installs the version the
+  project's registry resolves — never a model-chosen version or tarball. Names
+  never after `--` (npm install has no `--` separator need; argv is fixed).
+- **Invocation:** `npm install [--save-dev] <names…>` /
+  `npm uninstall <names…>`, **always plus `--ignore-scripts`**.
+- **`--ignore-scripts` decision (frozen):** required. `npm install` runs
+  `preinstall`/`postinstall` lifecycle code from the installed package —
+  arbitrary execution by another name and the exact composition route PD6
+  bans. `--ignore-scripts` is a fixed argv element the model cannot remove.
+  Known cost: packages legitimately needing install scripts (native builds,
+  `husky init`) break — the documented remedy is the developer running install
+  once by hand. Rejected alternative: allowlisting lifecycle scripts
+  (`npm config set ignore-scripts` + per-package allow) — npm has no reliable
+  per-package allow mechanism; machinery, not capability.
+- **Other side effects:** rewrites `package.json` + `package-lock.json`
+  (reviewable diff via `git_diff`); **network access** (registry fetch);
+  no `--force`, no `--legacy-peer-deps`, no registry override. Timeout 300 s.
+  pnpm/yarn/bun: `CAPABILITY_GAP` (FD6).
+- **`details`:** `{ packages: string[]; dev: boolean; manifestUpdated: true }`.
+
+### P1-5 `expo_dep_add` — `companions/expo/dep-add.ts`
+
+- **Schema:** `{ packages: string[] }` (1..20), same name grammar.
+- **Invocation:** `npx expo install <names…>` — the SDK-compatible version
+  resolver. **Never `npm install`** for Expo packages (docs/stacks/typescript.md
+  caveat): plain install takes latest and can break the SDK matrix. No `--` or
+  extra flags; `--ignore-scripts` is **not** passed here because `expo install`
+  is the supported path and may run package scripts — documented effect, and
+  the reason this is its own tool with its own description rather than a flag
+  on `js_dep_add`.
+- **Side effects:** `package.json` + lockfile rewrite, network, possible
+  lifecycle scripts (documented, Expo-blessed path). Timeout 600 s.
+- **`details`:** `{ packages: string[] }`.
+
+### P1-6 `py_dep_add` / P1-7 `py_dep_remove` — `companions/python/dep.ts`
+
+- **Schema:** as P1-3/P1-4 (`packages` 1..20, `dev` on add).
+- **Package-name validation:** PEP 508 name grammar —
+  `[A-Za-z0-9._-]+`, no extras, no version specifiers, no URLs, no VCS links
+  (`pkg>=2`, `pkg @ file://…`, `git+https://…` → `INVALID_ARGUMENT`). uv
+  resolves the version.
+- **Invocation (uv only, FD6):** `uv add [--dev] <names…>` / `uv remove <names…>`.
+- **Side-effect analysis:** rewrites `pyproject.toml` + `uv.lock`
+  (reviewable diff); network (PyPI fetch); **uv does not run arbitrary
+  lifecycle scripts on add** (uv installs wheels; build isolation runs the
+  package's build backend — `pdm`/`setuptools` build code, not install-time
+  scripts of the dependency). No `--index-url`/extra-index flags, no
+  extras (`pkg[foo]` rejected with the name grammar). Timeout 300 s.
+- **Poetry/pipenv:** `CAPABILITY_GAP` (FD6). `pip install`: rejected in FD6 —
+  no lockfile mutation to review.
+- **`details`:** `{ packages: string[]; dev: boolean }`.
+
+### P1 lifecycle/side-effect matrix
+
+| Tool | Network | Lifecycle scripts | Lockfile | Manifest | Other writes |
+|---|---|---|---|---|---|
+| `js_lint_fix` | no | no | no | no | named files only |
+| `py_lint_fix` | no | no | no | no | named files only |
+| `js_dep_add` | registry | **blocked** (`--ignore-scripts`, frozen) | `package-lock.json` | `package.json` | — |
+| `js_dep_remove` | no (local resolution) | n/a | `package-lock.json` | `package.json` | — |
+| `expo_dep_add` | registry + SDK resolution | possible (Expo-blessed path; documented) | project lockfile | `package.json` | — |
+| `py_dep_add` | PyPI | build-backend only, no install scripts | `uv.lock` | `pyproject.toml` | `.venv` update |
+| `py_dep_remove` | no | n/a | `uv.lock` | `pyproject.toml` | `.venv` update |
+
+### P1 milestones
+
+5. **M5 — lint fixes** (`js_lint_fix`, `py_lint_fix`) + fixtures.
+6. **M6 — JS/Expo deps** (`js_dep_add`, `js_dep_remove`, `expo_dep_add`) with
+   the name-grammar test suite and `--ignore-scripts` argv assertion.
+7. **M7 — Python deps** (`py_dep_add`, `py_dep_remove`).
+
+---
+
+## Deferred: A4 Go diagnostics reuse
+
+**No Go integration was built or will be built by this run.** The evaluation
+question — adopt, adapt, or defer
+[`mcp-server-go-quality`](https://github.com/afshinator/mcp-server-go-quality)
+as a Go diagnostics companion — is recorded on the ROADMAP Later/Evaluation
+list with the full seven-item review checklist from handoff §6:
+
+1. automatic `install_tools` must never be exposed as a read-only check or run
+   silently (installation is a separate, developer-controlled mutation);
+2. its developer-configured `extra_args` must never become model-supplied argv
+   — review config ownership and session-load behavior (an agent with
+   `write`/`edit` must not be able to author argv that a later check executes,
+   per the A10 composition route);
+3. the model may choose only enumerated diagnostics/check subsets and bounded
+   scope — no free-form process, command, argv, script, or executable path;
+4. verify side effects: caches, tool/binary downloads, vulnerability-DB
+   network access, file writes, project-controlled code;
+5. confirm Pi integration (MCP is not a Pi extension; adapter or Pi-native
+   rewrite required);
+6. constrain workspace roots, output cardinality, `native` payload size,
+   cancellation, startup cost;
+7. review license, pinning/reproducibility, and adapt-vs-depend.
+
+**Reason for deferral:** it requires read-only source and network review of an
+external repository, which this run cannot perform; its diagnostics are
+read-only and do not block any P0/P1 item. Everything README-observed about the
+server is unverified (A1 §Not-verified). If Go diagnostics prove deliverable
+through developer-named `run_validation` checks instead, prefer that and skip
+the server (smallest-design rule).
+
+---
+
+## (A5) Documentation and migration plan
+
+1. **Label every described tool implemented vs proposed.** In
+   `docs/stacks/{README,typescript,python,rust-go}.md`, each tool table gains a
+   **Status** column: `core` (shipped), `companion — planned (P0/P1)` linking
+   the plan, or `proposed` (fs_*, rust_*, go_*, `git_rm_cached`). No described
+   operation may read as shipped before its companion lands.
+2. **Replace `my-*-tools.ts` placeholder references with the real companions.**
+   Once a companion lands, its stack doc links
+   `companions/<stack>/` on GitHub (absolute URLs — README-link rule,
+   `tests/unit/readme-links.test.ts` stays green) and shows the actual
+   `-e ./companions/<stack>` load line. Until then the placeholder stays, named
+   as such.
+3. **Link templates.** Each stack doc's checks section links its
+   `docs/stacks/examples/*.json` file(s) and states the file's assumptions
+   (same table as A2-P0-7). Template files carry no comments (JSON), so the
+   assumptions live in the docs next to the link.
+4. **No automatic exposure, restated.** Docs keep the rule that nothing is
+   active until named in `--tools`/`defaultTools`/SDK selection; the example
+   launch lines list companion tool names explicitly.
+5. **`companions/README.md`** (ships with M1): what a companion is, the two
+   load paths (`-e ./companions/<name>` from a checkout; copy into
+   `.pi/extensions/` with the `../src/` import adjustment), the per-tool
+   contracts, and the statement that companions are never loaded by installing
+   core.
+6. **Migration of the README's "Shared extensions" section** (`docs/stacks/
+   README.md`): after P0, point the git table at `companions/git` as the
+   maintained reference implementation while keeping the "register your own"
+   instructions intact (developers may still hand-roll).
+7. **Links resolve:** all new doc links verified by extending the existing
+   readme-links test pattern to `docs/stacks/*.md` (test listed in A6).
+
+---
+
+## (A6) Acceptance matrix
+
+Every row is a named test to be added under `tests/` (unit or integration per
+existing layout). "Argv" tests assert the exact spawned argv via the shared
+arg-builder functions (unit) plus fixture repos (integration). All disposable
+git fixtures live in temp dirs; bare remotes are throwaway `git init --bare`.
+
+| Tool | Happy path | Failure | Scope / boundary | Fixed backend / no generic route |
+|---|---|---|---|---|
+| `git_create_branch` | create+switch, create-only, from startPoint | duplicate branch; hookless failure modes via GIT_FAILED | name charset (`-b`, `..`, `~`, whitespace, 256 chars), startPoint via `validateCommitRevision` | argv exactly `["switch","-c",name]` / `["branch",name]` variants |
+| `git_add` | stages named pair incl. untracked; rename pair | ignored file; nonexistent path | `..`, absolute, symlink-escape, option-like segment, leading-`:` pathspec (`:(glob)`, `:!`) → `INVALID_ARGUMENT`, 101st path → `LIMIT_EXCEEDED` | argv exactly `["add","--",…paths]` with child env `GIT_LITERAL_PATHSPECS=1` (literal paths, no pathspec magic); no `-A`/`-u` expressible (schema has no field) |
+| `git_commit` | one commit, message byte-equal, filesCommitted | failing `pre-commit` hook → `GIT_FAILED`; empty index pre-check | message ≤ 4000; no field can stage/amend/verify-off | argv exactly `["commit","-m",message]`; no-auto-stage test (unstaged edit excluded) |
+| `git_push` | push to bare `origin`; second push | non-fast-forward → `GIT_FAILED`, remote unchanged; missing upstream; detached HEAD | unknown remote; no force possible — argv asserted `["push",remote,branch]`; remote tip unchanged after rejected push | no refspec/flag field exists in schema |
+| `js_format_write` | exact pre/post byte diff; other files untouched | formatter exit ≠ 0 → `VALIDATION_FAILED`; timeout → `TIMEOUT` | `..`/symlink/absolute/`node_modules` rejection; 51 paths → `LIMIT_EXCEEDED` | backend constant → exact argv (`prettier --write --`); no backend/flag/config field in schema |
+| `py_format_write` | exact pre/post diff | as above | as above | argv exactly `["format","--",…paths]` |
+| templates | parse via `loadValidationConfig`; `run_validation` executes each check | malformed JSON → `PARSE_ERROR` | every check read-only — template scan test asserts no `--write`/`--fix`/`git add`/`install` in any `program`/`args` | `unit_file` uses verified `node_test` adapter only |
+| `js_lint_fix` / `py_lint_fix` | exact pre/post diff on safe-fixable fixture | exit ≠ 0; timeout | scope as formatters | no `--unsafe-fixes`/`--unsafe` in any argv (assert); schema has no mode field |
+| `js_dep_add`/`js_dep_remove` | `package.json`+lockfile diff exactly as npm produces; node_modules present | name-grammar rejections (`pkg@1.2.3`, `github:…`, `npm:…`, uppercase, empty) | 21 packages → `LIMIT_EXCEEDED` | argv asserted: `["install","--ignore-scripts",…names]` — `--ignore-scripts` present and unremovable |
+| `expo_dep_add` | version pinned by expo SDK in `package.json` diff | name-grammar rejections | as above | argv asserted `["expo","install",…names]` (no npm fallback) |
+| `py_dep_add`/`py_dep_remove` | `pyproject.toml`+`uv.lock` diff as uv produces | specifiers (`pkg>=2`, `pkg[extra]`, `git+…`) rejected | as above | argv asserted `["add",…]`/`["remove",…]` |
+
+**Cross-cutting tests (all tools):**
+
+- **`CAPABILITY_GAP` not shell fallback — three distinct cases per companion:**
+  1. **Unexpressible operation** — a request the selected schema cannot express
+     at all (stage-everything for `git_add`, force push, install
+     `pkg@version`) MUST return `CAPABILITY_GAP` (FD4 / handoff D6) — never
+     another code, never a shell or generic-runner fallback.
+  2. **Malformed or out-of-scope input** to a supported operation returns the
+     typed input/scope code: `INVALID_ARGUMENT`, `PATH_OUT_OF_SCOPE`, or
+     `LIMIT_EXCEEDED`.
+  3. **Execution failure of the frozen backend** returns `GIT_FAILED`,
+     `VALIDATION_FAILED`, or `TIMEOUT`.
+  Unsupported operations are always `CAPABILITY_GAP`, and no code path spawns
+  anything but the frozen backend (asserted by counting spawned processes in
+  the fixture harness).
+- **Core exposes no companion (D3 — the named test):**
+  `tests/integration/companions-not-in-core.test.ts` loads
+  `extensions/pi-nobash.ts` (the real core entry) with the fake-`pi` harness
+  and asserts the registered tool-name set is exactly the seven packaged tools
+  — `git_create_branch`, `git_add`, `git_commit`, `git_push`,
+  `js_format_write`, `py_format_write`, `js_lint_fix`, `py_lint_fix`,
+  `js_dep_add`, `js_dep_remove`, `expo_dep_add`, `py_dep_add`,
+  `py_dep_remove` are all absent. Paired test loads each `companions/*/index.ts`
+  with a fresh fake `pi` and asserts its tools appear **only** then. Together:
+  installing/loading core exposes no companion (FD1/FD2, A12).
+- **No-shell agent workflow demonstration (E2E):** fixture repo driven through
+  one full loop with only typed tools: `git_status` → `edit` (fixture write) →
+  `js_format_write` → `git_diff` → `git_add` → `git_commit` → `git_push` (bare
+  remote) → `run_validation` — asserting (a) no non-frozen process was spawned
+  beyond the frozen backends, and (b) every out-of-scope probe in the loop
+  returned a coded error, never execution.
+- **Doc tests:** template JSONs parse; `docs/stacks/*.md` links resolve
+  (extends `readme-links.test.ts`); stack docs carry the Status column.
+
+---
+
+## (A7) Open decisions
+
+Genuine choices only; each has a recommended default. None adds policy
+machinery.
+
+- **A7-1 `git_create_branch` default `switchTo`.** Default: **true** (create
+  and switch, matching the dominant branch-then-work flow and the docs'
+  `switchToBranch?` field). Alternative: false (create only — safer for
+  multi-branch tooling agents but forces a second operation for the common
+  case). Revisit only if a fixture workflow shows agents creating stray
+  branches.
+- **A7-2 `git_push` upstream convenience.** Default: **no `setUpstream` field
+  in P0** (developer runs `git push --set-upstream` once by hand; the failure
+  message names it). Alternative: `{ setUpstream: true }` emitting
+  `git push --set-upstream <remote> <branch>` — same argv family, no new risk
+  class; add it the first time a fixture workflow hits the missing-upstream
+  failure more than incidentally.
+- **A7-3 `git_add` tracked-only mode.** Default: **not in P0** (FD4). First
+  upgrade candidate if explicit-path staging proves tedious for large refactors:
+  a separate `git_add_tracked` tool (`git add -u`), never a flag on `git_add`.
+- **A7-4 Python formatter backends beyond Ruff.** Default: **Ruff only**
+  (docs/stacks/python.md names it; Black would be a second constant + argv
+  builder). Add Black only on demonstrated demand.
+- **A7-5 Biome as default JS backend vs Prettier.** Default: **Prettier**
+  (widest file-type coverage incl. `.md`/`.css`; Expo template already assumes
+  it). Biome stays a one-line switch (FD5). Revisit if a fixture project is
+  Biome-native.
+- **A7-6 `js_dep_add` lifecycle-script escape hatch.** Default: **none**
+  (`--ignore-scripts` always). If native-build packages become a real blocker
+  in practice, the narrow remedy is a separate developer-invoked flow, not a
+  schema flag.
+
+---
+
+## DoD for this plan (checked)
+
+- [x] All three outputs exist: this plan; `docs/stacks/examples/*.json` (5
+      templates, Biome-clean); ROADMAP P0/P1 rows updated.
+- [x] Every P0/P1 item names goal + AC + lever (Goal reconciliation table).
+- [x] Frozen decisions with rejected alternatives (FD1–FD6 + PD7).
+- [x] A4 section named exactly `Deferred: A4 Go diagnostics reuse`; no Go
+      integration built.
+- [x] D3 preserved: named test `companions-not-in-core.test.ts`.
+- [x] D6 preserved: PD6 restatement + per-tool "no generic route" column.

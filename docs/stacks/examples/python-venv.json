@@ -1,0 +1,41 @@
+{
+	"validation": {
+		"checks": {
+			"unit": {
+				"program": "pytest",
+				"args": ["-q"],
+				"cwd": ".",
+				"timeoutMs": 300000,
+				"targets": { "mode": "none" }
+			},
+			"typecheck": {
+				"program": "mypy",
+				"args": ["."],
+				"cwd": ".",
+				"timeoutMs": 180000,
+				"targets": { "mode": "none" }
+			},
+			"lint": {
+				"program": "ruff",
+				"args": ["check", "."],
+				"cwd": ".",
+				"timeoutMs": 120000,
+				"targets": { "mode": "none" }
+			},
+			"format_check": {
+				"program": "ruff",
+				"args": ["format", "--check", "."],
+				"cwd": ".",
+				"timeoutMs": 60000,
+				"targets": { "mode": "none" }
+			},
+			"build": {
+				"program": "python",
+				"args": ["-m", "build"],
+				"cwd": ".",
+				"timeoutMs": 300000,
+				"targets": { "mode": "none" }
+			}
+		}
+	}
+}

@@ -1,0 +1,41 @@
+{
+	"validation": {
+		"checks": {
+			"unit": {
+				"program": "npm",
+				"args": ["test", "--", "--ci"],
+				"cwd": ".",
+				"timeoutMs": 600000,
+				"targets": { "mode": "none" }
+			},
+			"typecheck": {
+				"program": "npx",
+				"args": ["tsc", "--noEmit"],
+				"cwd": ".",
+				"timeoutMs": 180000,
+				"targets": { "mode": "none" }
+			},
+			"lint": {
+				"program": "npx",
+				"args": ["expo", "lint"],
+				"cwd": ".",
+				"timeoutMs": 180000,
+				"targets": { "mode": "none" }
+			},
+			"format_check": {
+				"program": "npx",
+				"args": ["prettier", "--check", "."],
+				"cwd": ".",
+				"timeoutMs": 60000,
+				"targets": { "mode": "none" }
+			},
+			"doctor": {
+				"program": "npx",
+				"args": ["expo-doctor"],
+				"cwd": ".",
+				"timeoutMs": 300000,
+				"targets": { "mode": "none" }
+			}
+		}
+	}
+}

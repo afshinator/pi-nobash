@@ -29,20 +29,40 @@ priority. Detail always lives in the linked document, not here.
 
 ## P0 — stack companions: shared Git and formatters
 
-Planned by `task-plan-4` (output: `docs/plans/pi-nobash-companions-implementation-plan.md`);
-see the [companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3. The
-items below are **not implemented** — the run produces the plan, not the code.
+Planned and specified by
+[the companions implementation plan](./plans/pi-nobash-companions-implementation-plan.md)
+(`task-plan-4`); see also the
+[companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3. The items
+below are **not implemented** — each links its plan section; contracts (schemas,
+fixed argv, `details` shapes, tests) are frozen there (FD1–FD6).
 
-- [ ] Shared Git mutations: `git_create_branch`, `git_add`, `git_commit`, `git_push` (non-force, typed remote/branch)
-- [ ] `js_format_write` (Node/web and Expo)
-- [ ] `py_format_write`
-- [ ] Real, copyable `.pi/pi-nobash.json` templates for JS/TS and Python
+- [ ] Shared Git mutations: `git_create_branch`, `git_add`, `git_commit`, `git_push` —
+      explicit-path staging only, non-force push to a configured remote, current branch
+      only, no refspec/upstream field in P0
+      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan))
+- [ ] `js_format_write` (Node/web and Expo; Prettier default, one-line Biome switch)
+      and `py_format_write` (Ruff) — workspace-scoped, fixed argv
+      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan))
+- [x] Copyable `.pi/pi-nobash.json` templates (JS/TS npm + pnpm, Expo, Python venv + uv)
+      — done by the planning run (`task-plan-4`), 2026-10-11:
+      [docs/stacks/examples/](./stacks/examples/ts-node-npm.json) (5 files, Biome-clean)
+- [ ] Companion layout under `companions/` (GitHub-only reference source, never
+      auto-loaded by core) and the no-companion-on-core-load test
+      ([plan FD1/FD2, A6](./plans/pi-nobash-companions-implementation-plan.md#frozen-decisions))
 
 ## P1 — stack companions: lint fixes and dependencies
 
-- [ ] `js_lint_fix`, `py_lint_fix` (safe mode first; unsafe separate)
-- [ ] `js_dep_add`, `js_dep_remove`, `expo_dep_add`
-- [ ] `py_dep_add`, `py_dep_remove` (one supported workflow first — uv or Poetry, not all)
+Contracted by
+[the companions implementation plan, A3](./plans/pi-nobash-companions-implementation-plan.md#a3-p1-plan--lint-fixes-and-dependency-mutations):
+safe-mode lint fixes only (no `--unsafe-fixes`, never via `run_validation`);
+`js_dep_*` always `--ignore-scripts`; `expo_dep_add` uses `npx expo install`, never
+plain npm; Python deps on uv only; every package name grammar-validated with no
+version specifiers or URL/VCS forms; no model-supplied flags anywhere.
+
+- [ ] `js_lint_fix` (Biome/ESLint safe fixes), `py_lint_fix` (`ruff check --fix`);
+      unsafe modes stay a separate, unconsidered P2
+- [ ] `js_dep_add`, `js_dep_remove` (npm), `expo_dep_add` (`npx expo install`)
+- [ ] `py_dep_add`, `py_dep_remove` (uv only; Poetry/pipenv/pip are `CAPABILITY_GAP`)
 
 ## P2 — deferred
 

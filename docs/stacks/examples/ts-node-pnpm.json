@@ -1,0 +1,46 @@
+{
+	"validation": {
+		"checks": {
+			"unit": {
+				"program": "pnpm",
+				"args": ["test"],
+				"cwd": ".",
+				"timeoutMs": 300000,
+				"targets": { "mode": "none" }
+			},
+			"unit_file": {
+				"program": "node",
+				"args": ["--test"],
+				"cwd": ".",
+				"timeoutMs": 60000,
+				"targets": {
+					"mode": "file",
+					"roots": ["tests", "src"],
+					"extensions": [".test.ts"],
+					"runner": "node_test"
+				}
+			},
+			"typecheck": {
+				"program": "pnpm",
+				"args": ["run", "typecheck"],
+				"cwd": ".",
+				"timeoutMs": 120000,
+				"targets": { "mode": "none" }
+			},
+			"lint": {
+				"program": "pnpm",
+				"args": ["run", "lint"],
+				"cwd": ".",
+				"timeoutMs": 120000,
+				"targets": { "mode": "none" }
+			},
+			"format_check": {
+				"program": "pnpm",
+				"args": ["run", "format:check"],
+				"cwd": ".",
+				"timeoutMs": 60000,
+				"targets": { "mode": "none" }
+			}
+		}
+	}
+}
