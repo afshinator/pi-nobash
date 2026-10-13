@@ -17,14 +17,17 @@
 # Peers: git_impl 1.20 + formatting_impl 1.10 + reviewer 0.70 = 3.00.
 # agent_stop_threshold_percent is 100, so a peer may use its full allocation.
 #
-# Jev: evaluated for this run and EXCLUDED. Jev is a System-1 classifier for the
-# multi-agent harness (~/Documents/dev/multi-agent, docs/jev/*), not pi-nobash;
-# its own adoption gate (E1 API client, E2 latency/cost/variance) is unmet, and
-# R1 forbids putting probabilistic output at the exit gate. The harness-side
-# candidate that matches this run's risk (C1 semantic DoD-verdict check, because
-# criteriaSatisfied counts verdicts and never reads them --
-# src/supervisor/finalization.ts:52-58) belongs to a separate task-jev-* run and
-# must not gate this run's exit.
+# Jev: evaluated for use as a TOOL in this run (agents or supervisor calling a Jev
+# classifier on demand -- the docs' C7 / ask_jev candidate, Levels 8-10), not as
+# pi-nobash code and not as engine integration. Not added. A Jev tool needs
+# harness prerequisites in ~/Documents/dev/multi-agent: the E1 API client probe,
+# an ask_jev registration (src/pi/extension.ts for the supervisor; the always-on
+# extension list and toolsForPermissions in src/peer/peer-main.ts /
+# src/peer/peer-config.ts for peers), an opt-in schema flag, and prompt text --
+# none reachable from session.yaml. The deciding gate is the docs' own C7 verdict:
+# adopt only when a run shows agents burning budget on decisions a classifier
+# answers for a fraction of a cent. No such run yet. Jev stays out of
+# task-implement-5; if wanted it is a separate harness task, E1 first.
 version: "1.1"
 
 session:
