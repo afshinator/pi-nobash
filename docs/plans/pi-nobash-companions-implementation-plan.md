@@ -88,14 +88,20 @@ companions/
     index.ts           # registerExpoTools(pi): expo_dep_add (P1)
 ```
 
-Companions import shared primitives from `../src/` by relative path
-(`src/git/exec.ts`, `src/git/rev.ts`, `src/path-policy.ts`, `src/errors.ts`,
-`src/constants.ts`) plus `companions/process.ts` for non-git processes. One
-tool per module; one `registerX(pi)` per companion `index.ts`; no side effects
-at import time (A1's entrypoint pattern). Loading: developer runs
-`pi -e ./pi-nobash -e ./companions/git …` or copies the directory into
-`.pi/extensions/` (adjusting the `../src/` imports to the installed package
-path — documented in `companions/README.md`).
+Companions import shared primitives from `src/` by **relative path whose depth
+matches the file's location**: `companions/process.ts` (depth 1) uses
+`../src/…`; every file under `companions/<area>/` (depth 2) uses `../../src/…`
+(e.g. `../../src/git/exec.ts`, `../../src/path-policy.ts`, `../../src/errors.ts`,
+`../../src/constants.ts`). Verified against the loader: `../src/…` from a depth-2
+file fails with "Cannot find module"; the depth-2 form resolves. One tool per
+module; one `registerX(pi)` per companion `index.ts`; no side effects at import
+time (A1's entrypoint pattern).
+
+Loading keeps the tree intact, so the relative imports hold:
+`pi install ./companions/git` (local install, loaded in place) or
+`pi -e <repo>/companions/git`. **Do not copy a single companion directory out of
+the tree** — that is the only case where the relative imports break; this warning
+ships in `companions/README.md`.
 
 *Rationale:* zero duplication of the audited primitives (Ponytail), and A1 §2.3
 proves repo-root `companions/` is **not** auto-discovered by Pi, so the layout
@@ -106,56 +112,78 @@ published package invites auto-activation churn); nested `pi` manifests inside
 second loading story to test for no gain); duplicating `path-policy.ts` into
 each companion (drift from the audited implementation).
 
-**FD2 — Distribution: GitHub-only companions; core stays single-entry.**
-`companions/` is reference source on GitHub. The npm tarball `files` allowlist
-(`assets`, `extensions`, `src`, `README.md`) is **not** extended; the root
+**FD2 — Distribution: ship companions in the npm tarball; core stays single-entry.**
+`companions` is added to the `files` allowlist (`assets`, `companions`,
+`extensions`, `src`, `README.md`), so every install route — npm, git, or local —
+delivers the same thing: core plus reference companion source. The root
 `package.json` `pi.extensions` manifest keeps exactly one entry
-(`./extensions/pi-nobash.ts`, A14). A developer installing `pi-nobash` from npm
-gets no companion code and no companion tool.
+(`./extensions/pi-nobash.ts`, A14), and companion tools register
+`defaultActive: false`, so a shipped companion is **inert until explicitly
+loaded and selected**.
 
-*Rationale:* D3 (loading core must not expose companions) is enforced
-structurally — a tarball cannot ship what it does not contain, and the
-single-entry manifest cannot reference what does not exist in it.
-*Rejected:* adding `companions` to `files` (ships code npm consumers cannot
-load without edits and tempts manifest-listing them — the auto-exposure A12
-forbids); publishing `pi-nobash-git` etc. (new release surface, D2 defers it).
+*Rationale:* shipping is **not** what enforces D3 — A1 §2.2/§2.3 verified that Pi
+reads only the root `pi` manifest (never nested ones) and never auto-discovers a
+repo-root `companions/`; the single-entry manifest does that job with or without
+the files present. Including the source makes the npm install path equivalent to
+a clone, removes a second acquisition step from a developer who already chose to
+adopt the package, and pins companions to the release version rather than an
+unversioned GitHub `main`. The size cost is a few KB of source.
+*Rejected:* GitHub-only companions (a dev who installed via npm would need a
+second acquisition path, and the copy would be version-skewed); separate
+published packages `pi-nobash-git` etc. (new release surface, D2 defers it).
 
 **FD3 — `git_push` semantics.**
-`git_push { remote?: string }` pushes the **current** branch to a **configured**
-remote with no refspec, no flags, and no force:
+`git_push { remote?: string; setUpstream?: boolean }` pushes the **current**
+branch to a **configured** remote with no refspec, no force, and at most one
+flag:
 
 1. Resolve the current branch via `git rev-parse --abbrev-ref HEAD`; detached
    HEAD → `GIT_FAILED` ("detached HEAD; switch to a branch first").
 2. Default remote `origin`; a model-supplied `remote` must match an existing
    remote (`git remote` list), else `INVALID_ARGUMENT`. No remote creation.
-3. If the branch has no upstream, fail with `GIT_FAILED` naming the missing
-   upstream; the developer runs `git push --set-upstream` once by hand. (No
-   `setUpstream` schema field in P0 — see A7-2.)
-4. Invocation: `git push <remote> <branch>` — branch name only, never
-   `<src>:<dst>`, never `--force`/`--force-with-lease`, never tags, never
+3. `git rev-parse --abbrev-ref --symbolic-full-name <branch>@{upstream}` — if it
+   fails and `setUpstream` is not set, fail with `GIT_FAILED` naming the missing
+   upstream.
+4. `setUpstream: true` (default false) selects the second argv shape,
+   `git push --set-upstream <remote> <branch>` — the only flag, chosen by an
+   explicit boolean the model sets.
+5. Invocation: `git push [--set-upstream] <remote> <branch>` — branch name only,
+   never `<src>:<dst>`, never `--force`/`--force-with-lease`, never tags, never
    wildcards. Non-fast-forward rejection surfaces as `GIT_FAILED` with git's
    stderr.
 
 *Rationale:* push is the only operation landing on shared state (handoff §3
-guardrails); narrowest contract that still completes the commit→push workflow.
-*Rejected:* `setUpstream` schema field (P0 — extra argv surface; A7-2 keeps it
-as an open default); arbitrary refspec or `--force` variants (forbidden by the
-handoff); remote creation (a configuration mutation, not a push).
+guardrails); the contract stays narrow while completing the recorded
+create-branch → commit → push workflow. Without `setUpstream`, the first push of
+every new branch requires a shell — the outcome the package exists to avoid.
+Setting upstream writes local branch config; it is not remote creation.
+*Rejected:* dropping `setUpstream` (forces a manual shell step on the common
+path); arbitrary refspec or `--force` variants (forbidden by the handoff); remote
+creation (a configuration mutation, not a push).
 
 **FD4 — Staging modes.**
-`git_add { paths: string[] }` stages **explicit paths only**:
-`git add -- <validated paths>`. No `trackedOnly`, no `all`, no `-A`, no `-u`,
-no pathspec globs, no `.gitignore`-defeating modes in P0. A request to "stage
-everything" is a `CAPABILITY_GAP` the model reports; the developer stages by
-hand or a later, separately selected tool adds it.
+`git_add` supports two modes, each a fixed invocation:
 
-*Rationale:* handoff §3: "Document/implement explicit-path semantics first";
-explicit paths pair with the shipped `git_status`/`git_diff` so the model
-inspects exactly what it stages. One mode = one invocation = one test surface.
-*Rejected:* `mode: "explicit"|"tracked"|"all"` enum (ships the `-A` granularity
-that "commits something nobody looked at" before need is demonstrated);
-`trackedOnly` as a boolean field (same, smaller risk but still unrequested —
-A7-3 records it as the first upgrade if need appears).
+- `git_add { paths: string[] }` — explicit paths: `git add -- <validated paths>`,
+  where a path may be a file or a **directory** (verified: a directory path stages
+  its whole subtree under `GIT_LITERAL_PATHSPECS=1`). Paths are literal: no glob
+  expansion (verified: `*.txt` under literal pathspecs matches nothing), no
+  `:(glob)`, no `:!` exclusions.
+- `git_add { trackedOnly: true }` — `git add -u`: stages modifications and deletions
+  of already-tracked files, and **cannot** introduce an untracked file.
+
+No `-A`/all mode: adding untracked files is the one behavior that can include
+something the model never enumerated (a secret, a build artifact, a scratch file),
+which is the accidental-inclusion class this package exists to prevent. A request
+to stage everything is a `CAPABILITY_GAP` naming the missing mode.
+
+*Rationale:* the recorded workflow (assessment §2.3) stages *specific* changes, so
+explicit paths are the evidenced need, and directory paths keep that practical for
+large refactors. `trackedOnly` is a bounded, explicit mode (handoff §3 permits it as
+a deliberately enabled mode) that serves "stage my modifications" without new files.
+*Rejected:* `-A`/all (unbounded inclusion); a single `mode` enum hiding the
+granularity (the two modes are separate argv shapes, declared not implied —
+`trackedOnly` is a boolean, not a route to `-A`).
 
 **FD5 — Formatter selection per stack.**
 One fixed formatter backend per stack companion, chosen by the developer in
@@ -220,10 +248,10 @@ linter fixers get enumerated safe-fix modes only. The proving tests are in A6
 
 | Decision | Smallest complete design | Deliberately skipped |
 |---|---|---|
-| FD1 layout | 4 dirs, 1 shared runner module, relative imports into audited `src/` | Vendored copies, per-companion `package.json`, build step |
-| FD2 distribution | No manifest/files change at all | npm publication, `files` extension |
-| FD3 push | Resolve branch → validate remote → `git push <remote> <branch>` | `--set-upstream` field, refspec, force variants, remote creation |
-| FD4 staging | `git add -- paths` only | `trackedOnly`/`all` modes, pathspec globs |
+| FD1 layout | 4 dirs, 1 shared runner module, depth-correct relative imports into audited `src/` | Vendored copies, per-companion `package.json`, build step, import rewriting |
+| FD2 distribution | Add `companions` to `files`; manifest stays single-entry | A second acquisition path, per-companion packages |
+| FD3 push | Resolve branch → validate remote → `git push [--set-upstream] <remote> <branch>` | refspec, force variants, remote creation |
+| FD4 staging | `git add -- paths` (file or directory) plus `git add -u` | `-A`/all, pathspec globs, a granularity enum |
 | FD5 formatters | One-line backend constant + two argv builders per stack | Schema field, config file, formatter auto-detection, plugins |
 | FD6 managers | npm/expo/uv only | yarn, bun, pnpm dep tools; Poetry/pipenv |
 | Shared runner | `companions/process.ts` (~40 lines, modeled on `execGit`) | New dependency (execa etc.) — stdlib `child_process` only |
@@ -285,32 +313,44 @@ Mirrors `src/git/exec.ts`; ~40 lines, stdlib only.
 
 ### P0-2 `git_add` — `companions/git/add.ts`
 
-- **Schema:**
+- **Schema (two modes, exactly one required):**
   ```ts
   Type.Object({
-    paths: Type.Array(Type.String(), { minItems: 1, maxItems: 100 }),
+    paths: Type.Optional(Type.Array(Type.String(), { minItems: 1, maxItems: 100 })),
+    trackedOnly: Type.Optional(Type.Boolean({ default: false })),
   })
   ```
+  `paths` and `trackedOnly: true` are mutually exclusive; neither or both →
+  `INVALID_ARGUMENT`.
 - **Validation:** every path via `validateGitPaths`/`validateWorkspacePath`
   semantics (A1 table): relative to repo root, no absolute paths, no `..`
   traversal, no NUL, no option-like final segments, and no path whose first
   path segment begins with `:` (pathspec magic — `:(glob)`, `:!`, `:(top)`) →
-  `INVALID_ARGUMENT`; ≤ 100 paths.
-- **Invocation:** `git add -- <paths…>` on the session cwd, with the child
-  environment set to `GIT_LITERAL_PATHSPECS=1` (`execFixed`/`execGit` merge
-  the var into `spawn`'s `env`). `--` ends option parsing but does **not**
-  disable pathspec magic; `GIT_LITERAL_PATHSPECS=1` is the mechanism that
-  makes every path literal — no glob/pathspec expansion, no `:!` exclusions.
-- **Effects/limits:** index-only mutation of the named paths; new untracked
-  files named explicitly are staged (that is the point of explicit paths);
-  `.gitignore`d files refuse per git, surfaced as `GIT_FAILED`. Timeout 30 s.
+  `INVALID_ARGUMENT`; ≤ 100 paths. A path may name a file **or a directory**;
+  both are literal paths (a directory stages its subtree).
+- **Invocation (two fixed shapes):**
+  - explicit paths: `git add -- <paths…>` on the session cwd, with the child
+    environment set to `GIT_LITERAL_PATHSPECS=1` (`execFixed`/`execGit` merge the
+    var into `spawn`'s `env`). `--` ends option parsing but does **not** disable
+    pathspec magic; `GIT_LITERAL_PATHSPECS=1` is what makes every path literal —
+    no glob/pathspec expansion, no `:!` exclusions.
+  - tracked-only: `git add -u` (no paths).
+- **Effects/limits:** index-only mutation; in explicit-path mode a new untracked
+  file named explicitly is staged (that is the point of explicit paths); in
+  tracked-only mode only already-tracked modifications and deletions are staged,
+  and no untracked file can be added. `.gitignore`d files refuse per git,
+  surfaced as `GIT_FAILED`. Timeout 30 s.
 - **`details` (frozen):** `{ staged: string[]; truncated: boolean }` — parsed
   from `git diff --cached --name-only` after the add (bounded to the same
   100-path / 100 KB caps).
 - **Tests:** stages exactly the named files (byte-exact index diff via
   `git diff --cached --name-only` before/after); untracked explicit file staged;
-  renamed pair staged as rename; failures: `..`, absolute, symlink-escape,
-  option-like segment, ignored file, nonexistent path.
+  a **directory path** stages its whole subtree; a **glob** (`*.txt`) matches
+  nothing and is reported (literal pathspecs); `trackedOnly: true` stages a tracked
+  modification but **not** an untracked file; rename staged as rename; failures:
+  `..`, absolute, symlink-escape, option-like segment, `:`-magic first segment,
+  ignored file, nonexistent path, and `paths` supplied together with
+  `trackedOnly: true`.
 
 ### P0-3 `git_commit` — `companions/git/commit.ts`
 
@@ -348,27 +388,31 @@ Contract frozen in FD3. Schema:
 ```ts
 Type.Object({
   remote: Type.Optional(Type.String({ maxLength: 100 })),
+  setUpstream: Type.Optional(Type.Boolean({ default: false })),
 })
 ```
 
 - **Invocation (fixed sequence):**
   1. `git rev-parse --abbrev-ref HEAD` → current branch (detached → `GIT_FAILED`)
   2. if `remote` given: `git remote` list must contain it, else `INVALID_ARGUMENT`
-  3. `git rev-parse --abbrev-ref --symbolic-full-name <branch>@{upstream}` —
-     missing upstream → `GIT_FAILED` "no upstream for <branch>; developer must
-     run git push --set-upstream once"
-  4. `git push <remote=origin> <branch>`
+  3. `git rev-parse --abbrev-ref --symbolic-full-name <branch>@{upstream}` — if it
+     fails and `setUpstream` is not set → `GIT_FAILED` "no upstream for <branch>;
+     pass setUpstream: true or run git push --set-upstream once"
+  4. `git push [--set-upstream] <remote=origin> <branch>` — the only optional flag,
+     selected by the explicit `setUpstream` boolean
 - **Effects/limits:** mutates shared remote state — `destructiveHint: true`.
   Non-fast-forward/rejected push = `GIT_FAILED` with git's stderr (never
   retried with force). No refspec, no force, no tags, no remote creation, no
   URL in argv ever. Timeout 300 s (network). Stdout/stderr caps as usual.
 - **`details` (frozen):** `{ remote: string; branch: string; pushed: true }`.
 - **Tests (throwaway bare repo as `origin`):** happy push of a local commit;
-  push of second commit; non-fast-forward (remote advanced) fails with
-  `GIT_FAILED` and remote unchanged; no-force proof: rejected push leaves remote
-  tip unchanged and tool emitted no force flag (arg-builder unit test asserts
-  argv is exactly `["push", remote, branch]`); unknown remote rejected; detached
-  HEAD rejected; missing upstream rejected.
+  push of second commit; `setUpstream: true` sets tracking on a new branch (the
+  only argv shape with a flag: `["push","--set-upstream",remote,branch]`); a
+  brand-new branch without `setUpstream` fails `GIT_FAILED`; non-fast-forward
+  (remote advanced) fails with `GIT_FAILED` and remote unchanged; no-force proof:
+  rejected push leaves remote tip unchanged and the arg-builder test asserts the
+  argv contains no force flag for either shape; unknown remote rejected; detached
+  HEAD rejected.
 
 ### P0-5 `js_format_write` — `companions/javascript/format-write.ts`
 
@@ -451,15 +495,18 @@ parseable by `src/config.ts`'s `ValidationCheck` shape.
 
 ### P0 milestones (ordered slices)
 
-1. **M1 — Shared runner + Git core:** `companions/process.ts`,
+1. **M0 — Distribution:** add `companions` to `package.json` `files` and a test
+   that the packed tarball includes the companion source while loading core
+   registers no companion tool (FD2).
+2. **M1 — Shared runner + Git core:** `companions/process.ts`,
    `companions/git/{index,create-branch,add,commit}.ts` + registration test +
    git fixtures. Proves the companion loads alongside core with zero
    `defaultActive` tools active.
-2. **M2 — `git_push`:** `companions/git/push.ts` + bare-remote fixtures
+3. **M2 — `git_push`:** `companions/git/push.ts` + bare-remote fixtures
    (upstream, rejection, no-force).
-3. **M3 — Formatters:** `companions/javascript/format-write.ts`,
+4. **M3 — Formatters:** `companions/javascript/format-write.ts`,
    `companions/python/format-write.ts` + byte-diff fixtures.
-4. **M4 — Templates + docs:** templates (done — this run), A5 relabeling of
+5. **M4 — Templates + docs:** templates (done — this run), A5 relabeling of
    `docs/stacks/*.md` links to the companions and templates.
 
 Each slice: `npm run typecheck && npm test && npx biome check .` green before
@@ -720,20 +767,20 @@ Genuine choices only; each has a recommended default. None adds policy
 machinery.
 
 - **A7-1 `git_create_branch` default `switchTo`.** Default: **true** (create
-  and switch, matching the dominant branch-then-work flow and the docs'
-  `switchToBranch?` field). Alternative: false (create only — safer for
+  and switch, matching the dominant branch-then-work flow and the plan's
+  `switchTo?` field). Alternative: false (create only — safer for
   multi-branch tooling agents but forces a second operation for the common
   case). Revisit only if a fixture workflow shows agents creating stray
   branches.
-- **A7-2 `git_push` upstream convenience.** Default: **no `setUpstream` field
-  in P0** (developer runs `git push --set-upstream` once by hand; the failure
-  message names it). Alternative: `{ setUpstream: true }` emitting
-  `git push --set-upstream <remote> <branch>` — same argv family, no new risk
-  class; add it the first time a fixture workflow hits the missing-upstream
-  failure more than incidentally.
-- **A7-3 `git_add` tracked-only mode.** Default: **not in P0** (FD4). First
-  upgrade candidate if explicit-path staging proves tedious for large refactors:
-  a separate `git_add_tracked` tool (`git add -u`), never a flag on `git_add`.
+- **A7-2 `git_push` upstream convenience — DECIDED: include.** `setUpstream`
+  (boolean, default false) emits `git push --set-upstream <remote> <branch>`.
+  Decided because the recorded workflow is create-branch → commit → push, and
+  without it the first push of every new branch needs a shell. It is one boolean
+  selecting one extra fixed argv shape; setting upstream writes local branch
+  config, not remote state.
+- **A7-3 `git_add` tracked-only mode — DECIDED: include.** `trackedOnly: true`
+  → `git add -u` (FD4). Bounded: it can never introduce an untracked file, so it
+  cannot include something the model did not enumerate. `-A`/all remains excluded.
 - **A7-4 Python formatter backends beyond Ruff.** Default: **Ruff only**
   (docs/stacks/python.md names it; Black would be a second constant + argv
   builder). Add Black only on demonstrated demand.

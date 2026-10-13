@@ -69,21 +69,23 @@ pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts \
 
 | Tool | Input | Effect |
 |---|---|---|
-| `git_create_branch` | `{ name, startPoint?, switchToBranch? }` | create (and optionally switch to) a branch; `name` validated as a Git ref |
-| `git_add` | `{ paths }` \| `{ trackedOnly: true }` \| `{ all: true }` | stage named paths, tracked-only (`-u`), or everything (`-A`) |
-| `git_commit` | `{ message, all?: boolean }` | commit staged changes; `all: true` stages tracked changes first (`-a`) |
-| `git_push` | `{ remote?, branch?, setUpstream? }` | push; the only Git operation that changes shared state |
-| `git_rm_cached` *(optional)* | `{ paths }` | untrack paths but keep them on disk |
+| `git_create_branch` | `{ name, startPoint?, switchTo? }` | create (and optionally switch to) a branch; `name` validated as a Git ref |
+| `git_add` | `{ paths }` \| `{ trackedOnly: true }` | stage named paths (file or directory) or all tracked modifications (`-u`); paths are literal |
+| `git_commit` | `{ message }` | commit the staged index; never stages and never `-a` |
+| `git_push` | `{ remote?, setUpstream? }` | push the current branch to a configured remote, non-force; `setUpstream: true` adds `--set-upstream` |
+| `git_rm_cached` *(deferred — P2)* | `{ paths }` | untrack paths but keep them on disk |
 
-Staging granularity is a real choice, so expose the level you want and say which it is in the
-tool description:
+Two staging modes ship, each a fixed invocation:
 
-1. **Explicit paths** — most predictable; pair it with the shipped `git_status`/`git_diff`
-   so the model inspects the diff before committing.
-2. **Tracked only** — `git add -u`; cannot sweep in an untracked `.env`, token file, or
-   build artifact.
-3. **Everything** — `git add -A`; convenient, and the granularity that commits something
-   nobody looked at. Fine to expose; just make it explicit.
+1. **Explicit paths** — a file **or a directory** (`git add -- <paths>`); literal, so no glob
+   expands. Pair it with the shipped `git_status`/`git_diff` so the model inspects the diff
+   before committing.
+2. **Tracked only** — `git add -u`: stages modifications and deletions of already-tracked
+   files, and cannot introduce an untracked file.
+
+`git add -A` (stage untracked files too) is intentionally not implemented: it is the one mode
+that can include something the model never enumerated — a secret, a build artifact, a scratch
+file. A request to stage everything returns `CAPABILITY_GAP`.
 
 Push is its own tool because it is different in kind, not degree: it is the only operation
 whose effect lands on a shared remote and is not undone by a local reset.

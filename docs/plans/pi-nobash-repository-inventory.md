@@ -172,6 +172,11 @@ step and no runtime dependency; the tarball is pure source.
   that is consistent with the handoff's "maintained source/reference
   extensions, not published packages" preference, but it means a developer
   installing `pi-nobash` from npm gets **no** companion code.
+
+  **Decision (plan FD2, 2026-10-12):** the `files` allowlist is extended with
+  `companions`, so the tree ships and the npm install path matches a clone. This
+  does not weaken D3: Pi reads only the root `pi` manifest (§2.2) and never
+  auto-discovers a repo-root `companions/` (§2.3).
 - `.pi/pi-nobash.json` does not exist in this repository (no `.pi/` directory
   on disk). It is a per-adopting-project configuration file; the handoff's D7
   templates now exist as copyable starting points under
