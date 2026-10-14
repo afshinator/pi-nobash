@@ -21,13 +21,25 @@
 #       required after that run), so this run carries a current config.
 #
 # Budget: session.max_cost_usd 2.00 is the PEER ceiling.
-# hardener 1.00 + scribe 0.50 + reviewer 0.50 = 2.00.
-# agent_stop_threshold_percent 100 + stop_at_work_order_boundary so a peer is
-# never cut off mid-slice.
+# hardener 1.20 + scribe 0.40 + reviewer 0.40 = 2.00. Sized by work weight: the
+# hardener owns 4 of the 5 items (all of tests/**), the scribe a 4-file docs
+# relabel, the reviewer a read plus one command (its attestation has cost cents in
+# past runs). agent_stop_threshold_percent 95 (not 100) so a peer keeps one fix
+# round of headroom instead of stopping exactly at its cap mid-slice — a restart
+# does not reset accumulated spend, so a peer stopped at 100% would stop again
+# immediately. stop_at_work_order_boundary so a peer is never cut off mid-slice.
 #
 # session.jev is deliberately omitted: the optional semantic advisory is
 # recorded in final.md and never changes the exit code, and the operator chose
 # not to use Jev on this work.
+#
+# Ponytail: every implementation/refactor/code/doc change and architecture choice
+# must carry a recorded Ponytail reconciliation (smallest complete design, what
+# was deliberately skipped, no new abstraction/dependency) in plan.md, and the
+# reviewer attests each is non-vacuous.
+# The reviewer is a read-only peer allowed exactly one command -- `npx biome check .`
+# (session.shell_vocabulary) -- so it independently lints the produced tree and
+# reports any issue to fix.
 version: "1.2"
 
 session:
@@ -35,8 +47,11 @@ session:
   supervisor_model: "deepseek/deepseek-flash"
   attester: "reviewer"
   max_cost_usd: 2.00
-  agent_stop_threshold_percent: 100
+  agent_stop_threshold_percent: 95
   stop_at_work_order_boundary: true
+  # One exact command the read-only reviewer may run (exact-match allowlist).
+  shell_vocabulary:
+    - "npx biome check ."
   verify_models: "strict"
   heartbeat_timeout_ms: 5000
   peer_prompt_timeout_ms: 600000
@@ -96,13 +111,15 @@ session:
 
     Roster and single-writer ownership:
     - hardener (glm-5p3-flash; read/edit/shell) owns tests/**: G1-G3 (E2E
-      workflow, real-ruff-or-labelled-skip, remote-isolation guard) and the
-      byte-cap proof. Write the E2E test first (RED), then the smallest helper.
+      workflow, real-ruff-or-labelled-skip, remote-isolation guard), the
+      byte-cap proof, and the docs/stacks link-resolution test that asserts G4.
+      Write the E2E test first (RED), then the smallest helper.
     - scribe (deepseek/deepseek-flash; read/edit, no shell) owns docs/stacks/*.md
       and docs/ROADMAP.md: G4. Do not touch tests/.
-    - reviewer (gpt-6-luna; read-only, no shell) is the designated attester. It
-      reads the actual files and runs nothing; it attests each DoD criterion
-      verbatim in the fenced JSON block the finalize gate requires.
+    - reviewer (gpt-6-luna; read-only, shell on with exactly one allowed command:
+      `npx biome check .`) is the designated attester. It reads the actual files,
+      runs that one command, and attests each DoD criterion verbatim in the fenced
+      JSON block the finalize gate requires.
     - No peer writes another peer's files. Peers cannot message each other; relay
       questions yourself.
 
@@ -113,9 +130,13 @@ session:
       `npm test`, `npx biome check .`. A record must state the exact counts
       (tests/pass/fail/skip and files checked); do not round or restate them from
       memory. If a check cannot run, that is BLOCKED, not passed.
-    - Ponytail: smallest complete test/doc change; reuse
-      tests/helpers/companion-harness.ts and existing fixtures; no new dependency.
-      State the Ponytail note per decision (smallest design, what was skipped).
+    - Ponytail reconciliation (mandatory for EVERY implementation, refactor,
+      code/document change, and architecture choice, not only the large ones):
+      for each, record in plan.md the change, the smallest complete design that
+      works, what was deliberately skipped, and any new abstraction or dependency
+      (must be none). Reuse tests/helpers/companion-harness.ts and existing
+      fixtures; add no dependency. A change with no recorded reconciliation is not
+      done, and the reviewer verifies the reconciliation is non-vacuous.
 
     Persistent, resumable execution plan (mandatory FIRST):
     1. If plan.md exists, READ IT FIRST and reconcile against the files; never
@@ -140,6 +161,11 @@ session:
       reply with a fenced JSON array of {criterion, result, evidence}, one entry
       per criterion, each criterion copied verbatim. A missing, rephrased, or
       failed criterion fails the run.
+    - Before the attestation, have the reviewer run exactly `npx biome check .`
+      (its only allowed command) on the final tree, report the exact output, and
+      record it in plan.md. Any reported issue must be fixed by the owning peer
+      with biome re-run clean, or listed as an explicit open finding with the
+      reason.
     - Call finalize with dod:true only after the tests, docs, and gates are in
       place and the reviewer's evidence passes; otherwise dod:false with a
       concrete reason. Leave plan.md usable as a standalone starting point.
@@ -169,6 +195,8 @@ ask:
     - "A deterministic multi-byte fixture proves process.ts enforces the 100 KB per-stream cap in bytes rather than characters independently of the Node version, and it fails if the cap counts characters."
     - "docs/stacks/*.md tool tables carry an implemented-versus-proposed Status label and link the shipped companions, docs/ROADMAP.md marks the P0 rows done, and every relative link in docs/stacks/*.md resolves to a file that exists (asserted by a test)."
     - "src/ and extensions/ are unchanged, and npm run typecheck, npm test, and npx biome check . all exit 0 on the run's tree."
+    - "The reviewer independently ran `npx biome check .` on the final tree and its exact result is recorded in run-details/plan.md; any issue it reported was fixed by the owning peer with a clean re-run, or recorded as an explicit open finding with the reason."
+    - "Every implementation, refactor, code/document change, and architecture choice in this run has a Ponytail reconciliation recorded in run-details/plan.md naming the smallest complete design and what was deliberately skipped, and the reviewer confirms each is non-vacuous."
 
 agents:
   - id: "hardener"
@@ -178,7 +206,7 @@ agents:
       read: true
       edit: true
       shell: true
-    max_cost_usd: 1.00
+    max_cost_usd: 1.20
     system_prompt: |
       Hardening run. You own tests/** only. Do NOT change companions/**, src/,
       or extensions/ behaviour, and do not start P1. Read
@@ -206,6 +234,11 @@ agents:
          exceeds the cap when counted as characters but not as bytes, and vice
          versa) proving companions/process.ts enforces 100 KB per stream in bytes
          and truncates on a code-point boundary, independent of the Node version.
+      5. The docs/stacks link-resolution test G4's DoD item requires and nobody else
+         can own: assert that every relative link in docs/stacks/*.md resolves to a
+         file that exists in the tree. This is a test, not a docs edit — the scribe
+         writes the docs, you assert them. Report failures to the supervisor rather
+         than editing docs/stacks yourself.
       Keep assertions exact (argv, post-bytes, spawn counts). Reuse existing
       helpers; add no dependency. Run `npm run typecheck`, `npm test`,
       `npx biome check .` and report exact counts. Record RED/GREEN evidence and a
@@ -218,7 +251,7 @@ agents:
       read: true
       edit: true
       shell: false
-    max_cost_usd: 0.50
+    max_cost_usd: 0.40
     system_prompt: |
       You own docs/stacks/*.md and docs/ROADMAP.md only. Do not touch tests/,
       companions/**, src/, or extensions/.
@@ -239,9 +272,14 @@ agents:
       - Mark the P0 rows in docs/ROADMAP.md done, dating them and naming the merge
         commit 5e6ea18; leave the P1 row blocked on implementation.
       Keep edits factual and minimal; do not restate schemas that live in the plan
-      (link them). Run `npx biome check .` (markdown/links) and
-      `npm test` (the readme-links test) and report exact results. Report to the
-      supervisor only, with a Ponytail note (smallest edit, what was skipped).
+      (link them). You have NO shell permission, so you cannot run `npx biome check .`
+      or `npm test` yourself: do not claim to have run them. Report the exact files and
+      edits you made instead. The gate runs are covered elsewhere — the supervisor runs
+      them, `validation.commands` re-runs them mechanically when a peer changes a file,
+      and the hardener owns the test that asserts every docs/stacks link resolves. If a
+      link or label looks wrong and only a command could confirm it, ask the supervisor
+      with the specific file and line. Report to the supervisor only, with a Ponytail
+      note (smallest edit, what was skipped).
 
   - id: "reviewer"
     title: "Independent hardening reviewer"
@@ -249,12 +287,13 @@ agents:
     permissions:
       read: true
       edit: false
-      shell: false
-    max_cost_usd: 0.50
+      shell: true
+    max_cost_usd: 0.40
     system_prompt: |
       You are the designated attester for this hardening run: only your verdict
       block is trusted by the finalize gate. Read the actual files and test code;
-      a peer's claim is not evidence. You run no commands.
+      a peer's claim is not evidence. Your one allowed command is exactly
+      `npx biome check .`; run nothing else.
 
       Verify against docs/plans/pi-nobash-companions-implementation-plan.md (A6)
       and the run's DoD:
@@ -270,6 +309,12 @@ agents:
       - docs/stacks Status labels match the shipped companions; ROADMAP P0 rows
         are done; docs/stacks relative links resolve.
       - Write scope: src/ and extensions/ unchanged; no P1 tool added.
+      - ponytail: every change and architecture choice in plan.md has a
+        non-vacuous Ponytail reconciliation (smallest complete design; what was
+        deliberately skipped; no new abstraction or dependency).
+      - biome: run exactly `npx biome check .` on the final tree, report the exact
+        output to the supervisor for plan.md, and raise any reported issue as a
+        blocking finding unless it is fixed and biome re-run clean.
       - Reports: the gate counts the run states match a fresh read of the tree.
       Reply APPROVE or CHANGES_REQUESTED with blocking issues and file evidence.
       For the attestation, copy EVERY DoD criterion verbatim, in DoD order, into a
