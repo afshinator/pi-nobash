@@ -81,7 +81,9 @@ test("D3: companion tools appear only when each companion index is loaded", asyn
 			"git_create_branch",
 			"git_push",
 			"js_format_write",
+			"js_lint_fix",
 			"py_format_write",
+			"py_lint_fix",
 		].sort(),
 	);
 	for (const tool of tools) {
@@ -111,12 +113,12 @@ test("D3: each companion registers only its own tool names (per-companion fresh 
 		[
 			"companions/javascript/index.ts",
 			(pi) => registerJsTools(pi),
-			["js_format_write"],
+			["js_format_write", "js_lint_fix"],
 		],
 		[
 			"companions/python/index.ts",
 			(pi) => registerPythonTools(pi),
-			["py_format_write"],
+			["py_format_write", "py_lint_fix"],
 		],
 	];
 	// Fresh pi per companion: registering one companion must register exactly

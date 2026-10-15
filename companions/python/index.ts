@@ -2,8 +2,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runTool } from "../../src/errors.ts";
 import { bindCompanionConfig } from "../config.ts";
 import { pyFormatWrite, pyFormatWriteTool } from "./format-write.ts";
+import { pyLintFix, pyLintFixTool } from "./lint-fix.ts";
 
-/** Registers the P0 Python companion tools (P1 tools land separately). */
+/** Registers the Python companion tools (format + safe lint fix). */
 export function registerPythonTools(pi: ExtensionAPI): void {
 	const getConfig = bindCompanionConfig(pi);
 	pi.registerTool({
@@ -14,6 +15,13 @@ export function registerPythonTools(pi: ExtensionAPI): void {
 		execute: (_toolCallId, params, signal, _onUpdate, ctx) =>
 			runTool(async () =>
 				pyFormatWrite(params, signal, ctx.cwd, getConfig(ctx).python.formatter),
+			),
+	});
+	pi.registerTool({
+		...pyLintFixTool,
+		execute: (_toolCallId, params, signal, _onUpdate, ctx) =>
+			runTool(async () =>
+				pyLintFix(params, signal, ctx.cwd, getConfig(ctx).python.linter),
 			),
 	});
 }

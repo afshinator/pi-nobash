@@ -12,11 +12,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { JS_LINTERS, PY_LINTERS } from "../../../companions/config.ts";
+import { registerJsTools } from "../../../companions/javascript/index.ts";
 import {
 	jsLintFix,
 	jsLintFixTool,
 } from "../../../companions/javascript/lint-fix.ts";
+import { registerPythonTools } from "../../../companions/python/index.ts";
 import {
 	pyLintFix,
 	pyLintFixTool,
@@ -300,6 +303,53 @@ test("timeout -> TIMEOUT", async () => {
 		assert.equal(py.details.code, "TIMEOUT");
 	} finally {
 		restoreSpawn();
+	}
+});
+
+type AnyTool = { name: string; parameters: unknown };
+function registeredTools(): AnyTool[] {
+	const tools: AnyTool[] = [];
+	const pi = {
+		registerTool: (t: unknown) => tools.push(t as AnyTool),
+		on: () => () => {},
+	} as unknown as ExtensionAPI;
+	registerJsTools(pi);
+	registerPythonTools(pi);
+	return tools;
+}
+
+test("schema audit over the registered tools — no backend/command/flag field", () => {
+	const tools = registeredTools();
+	for (const expected of [
+		"js_format_write",
+		"js_lint_fix",
+		"py_format_write",
+		"py_lint_fix",
+	])
+		assert.ok(
+			tools.some((t) => t.name === expected),
+			`missing registered tool ${expected}`,
+		);
+	for (const tool of tools) {
+		const keys = collectKeys(tool.parameters);
+		for (const forbidden of [
+			"backend",
+			"mode",
+			"flags",
+			"unsafe",
+			"unsafeFixes",
+			"fix",
+			"command",
+			"argv",
+			"program",
+			"executable",
+			"config",
+			"shell",
+		])
+			assert.ok(
+				!keys.includes(forbidden),
+				`${tool.name}: schema exposes "${forbidden}"`,
+			);
 	}
 });
 
