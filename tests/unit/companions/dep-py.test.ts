@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	type DepCommands,
 	PY_PACKAGE_MANAGERS,
@@ -16,6 +23,7 @@ import {
 	pyDepRemove,
 	pyDepRemoveTool,
 } from "../../../companions/python/dep.ts";
+import { registerPythonTools } from "../../../companions/python/index.ts";
 
 const dirs: string[] = [];
 function workspace(): string {
@@ -427,5 +435,124 @@ test("py dep tool defs: direct, defaultActive false, destructive, one-line snipp
 				!def.promptSnippet.includes("\n"),
 			`${def.name} promptSnippet must be one line`,
 		);
+	}
+});
+
+// --- registration (F7): config-driven, dep tools last ---
+type RegisteredTool = {
+	name: string;
+	execute: (...args: unknown[]) => Promise<{
+		isError?: boolean;
+		content: Array<{ text?: string }>;
+		details: unknown;
+	}>;
+};
+function mockRegistrar() {
+	const registered: RegisteredTool[] = [];
+	const handlers = new Map<string, Array<(...args: unknown[]) => unknown>>();
+	const pi = {
+		on(event: string, handler: (...args: unknown[]) => unknown) {
+			const list = handlers.get(event) ?? [];
+			list.push(handler);
+			handlers.set(event, list);
+			return () => {};
+		},
+		registerTool: (tool: RegisteredTool) => registered.push(tool),
+	} as unknown as ExtensionAPI;
+	return { pi, registered, fire };
+	function fire(event: string, ctx: unknown): void {
+		for (const h of handlers.get(event) ?? []) h({}, ctx);
+	}
+}
+
+function writeCompanionConfig(ws: string, pythonPackageManager: string): void {
+	mkdirSync(path.join(ws, ".pi"), { recursive: true });
+	writeFileSync(
+		path.join(ws, ".pi", "pi-nobash-companions.json"),
+		JSON.stringify({
+			companions: {
+				javascript: {
+					formatter: "prettier",
+					linter: "biome",
+					packageManager: "npm",
+				},
+				python: {
+					formatter: "ruff",
+					linter: "ruff",
+					packageManager: pythonPackageManager,
+				},
+			},
+		}),
+	);
+}
+
+test("registration: py dep tools are registered last and run the uv table entry", async () => {
+	const ws = workspace();
+	writeCompanionConfig(ws, "uv");
+	const { pi, registered, fire } = mockRegistrar();
+	registerPythonTools(pi);
+	assert.deepEqual(
+		registered.map((t) => t.name),
+		["py_format_write", "py_lint_fix", "py_dep_add", "py_dep_remove"],
+	);
+	const ctx = {
+		cwd: ws,
+		sessionManager: { getSessionId: () => "pydep-registration" },
+	};
+	fire("session_start", ctx);
+	installSpawnInterceptor();
+	try {
+		calls.length = 0;
+		scripted = fakeChild(0);
+		const tool = registered.find((t) => t.name === "py_dep_add");
+		assert.ok(tool);
+		const out = envelope(
+			await tool.execute(
+				"id",
+				{ packages: ["Django"], dev: true },
+				undefined,
+				undefined,
+				ctx,
+			),
+		);
+		assert.equal(out.isError, false, out.text);
+		assert.equal(calls.length, 1);
+		assert.equal(calls[0]?.program, "uv");
+		assert.deepEqual(calls[0]?.args, ["add", "--dev", "Django"]);
+		assert.deepEqual(out.details, { packages: ["Django"], dev: true });
+	} finally {
+		restoreSpawn();
+	}
+});
+
+test("config boundary: python.packageManager poetry -> PARSE_ERROR envelope with zero spawns", async () => {
+	const ws = workspace();
+	writeCompanionConfig(ws, "poetry");
+	const { pi, registered, fire } = mockRegistrar();
+	registerPythonTools(pi);
+	const ctx = {
+		cwd: ws,
+		sessionManager: { getSessionId: () => "pydep-config-boundary" },
+	};
+	fire("session_start", ctx);
+	installSpawnInterceptor();
+	try {
+		calls.length = 0;
+		const tool = registered.find((t) => t.name === "py_dep_add");
+		assert.ok(tool);
+		const out = envelope(
+			await tool.execute(
+				"id",
+				{ packages: ["left-pad"] },
+				undefined,
+				undefined,
+				ctx,
+			),
+		);
+		assert.equal(out.isError, true);
+		assert.equal(out.details.code, "PARSE_ERROR");
+		assert.equal(calls.length, 0);
+	} finally {
+		restoreSpawn();
 	}
 });

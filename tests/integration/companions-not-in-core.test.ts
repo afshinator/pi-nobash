@@ -48,6 +48,8 @@ const COMPANION_NAMES = [
 	"js_dep_add",
 	"js_dep_remove",
 	"expo_dep_add",
+	"py_dep_add",
+	"py_dep_remove",
 ];
 
 test("D3: loading the real core entry registers exactly the seven packaged tools and no companion tool", async () => {
@@ -85,6 +87,8 @@ test("D3: companion tools appear only when each companion index is loaded", asyn
 			"js_dep_remove",
 			"py_format_write",
 			"py_lint_fix",
+			"py_dep_add",
+			"py_dep_remove",
 		].sort(),
 	);
 	for (const tool of tools) {
@@ -124,7 +128,7 @@ test("D3: each companion registers only its own tool names (per-companion fresh 
 		[
 			"companions/python/index.ts",
 			(pi) => registerPythonTools(pi),
-			["py_format_write", "py_lint_fix"],
+			["py_format_write", "py_lint_fix", "py_dep_add", "py_dep_remove"],
 		],
 	];
 	// Fresh pi per companion: registering one companion must register exactly
