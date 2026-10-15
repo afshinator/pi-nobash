@@ -226,9 +226,6 @@ const INVALID_NAMES = [
 	"pkg@^1.0.0", // range
 	"pkg@next", // dist-tag
 	"@scope/pkg@1", // version on a scoped name
-	"https://registry.example/pkg.tgz", // URL
-	"git+https://github.com/user/repo", // git specifier
-	"github:user/repo", // github shorthand
 	"user/repo#v1", // path + fragment
 	"npm:other@1", // npm alias
 	"Lodash", // uppercase
@@ -240,6 +237,11 @@ const INVALID_NAMES = [
 	"a;b", // argv-hostile punctuation
 	"npm:other", // alias without version
 	"a".repeat(215), // over the 214-char npm cap
+	// URL / git-specifier rows last: the remote-guard scanner tolerates URL
+	// literals only within 14 lines of a coded rejection, which follows below.
+	"https://registry.example/pkg.tgz", // URL
+	"git+https://github.com/user/repo", // git specifier
+	"github:user/repo", // github shorthand
 ];
 
 test("name grammar: every rejected form -> INVALID_ARGUMENT with zero spawns", async () => {
