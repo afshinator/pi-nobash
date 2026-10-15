@@ -463,6 +463,11 @@ test("git_rm_cached: the only rm spawn is exactly git rm -r --cached -- <paths> 
 	assert.ok(rmSpawn, "expected exactly one rm spawn");
 	assert.deepEqual(rmSpawn.args, ["rm", "-r", "--cached", "--", "tracked.txt"]);
 	assert.equal(rmSpawn.program, "git");
+	assert.equal(
+		rmSpawn.env?.GIT_LITERAL_PATHSPECS,
+		"1",
+		"the rm spawn must run with GIT_LITERAL_PATHSPECS=1",
+	);
 	for (const { args } of rec.spawns) {
 		assert.ok(
 			!args.some(

@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-export type SpawnRecord = { program: string; args: string[] };
+export type SpawnRecord = {
+	program: string;
+	args: string[];
+	env?: NodeJS.ProcessEnv | undefined;
+};
 
 /** Repository root, resolved from this file's location (tests/helpers/). */
 export const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
@@ -29,7 +33,8 @@ export function recordSpawns(): {
 		args: string[],
 		opts?: object,
 	) => {
-		spawns.push({ program, args });
+		const env = (opts as { env?: NodeJS.ProcessEnv } | undefined)?.env;
+		spawns.push({ program, args, env });
 		return simple(program, args, opts);
 	};
 	return {
