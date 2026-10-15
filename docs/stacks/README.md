@@ -15,9 +15,12 @@ Per-stack setups, each complete and copy-ready:
 1. **Select tools** — Pi's `--tools`, `.pi/settings.json` `defaultTools`, or SDK `tools`.
    Chooses from tools that already exist.
 2. **Configure checks** — `.pi/pi-nobash.json` maps a check name to a fixed, read-only
-   developer-owned command. This is the only config file; it adds nothing to the toolset.
-3. **Add extensions** — one typed tool per mutation the workflow needs. Nothing mutating
-   ships with pi-nobash.
+   developer-owned command, and `.pi/pi-nobash-companions.json` selects a companion backend
+   by enum name (FD5). Neither file adds anything to the toolset.
+3. **Add extensions** — one typed tool per mutation the workflow needs. Nothing mutating is
+   auto-loaded by core; the opt-in P0 companions (`git_create_branch`, `git_add`,
+   `git_commit`, `git_push`, `js_format_write`, `py_format_write`) ship under
+   [`companions/`](../../companions/README.md) and are loaded explicitly.
 
 Layers 1 and 3 are stack-independent. Only layer 2 changes per stack: the seven packaged
 tools work for any language, and the Git/file extensions don't care what the code is written
@@ -46,34 +49,44 @@ As project defaults, `.pi/settings.json`:
 Drop `edit,write` for a read-only reviewer. Add extension tool names for an agent that may
 mutate Git, files, or dependencies.
 
-| Tool | Source | Mutates |
-|---|---|---|
-| `read` `grep` `find` `ls` | Pi native | no |
-| `edit` `write` | Pi native | yes |
-| `json_query` `query_jsonl` | pi-nobash | no |
-| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no |
-| `run_validation` | pi-nobash | depends on the check |
+| Tool | Source | Mutates | Status |
+|---|---|---|---|
+| `read` `grep` `find` `ls` | Pi native | no | implemented |
+| `edit` `write` | Pi native | yes | implemented |
+| `json_query` `query_jsonl` | pi-nobash | no | implemented |
+| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | implemented |
+| `run_validation` | pi-nobash | depends on the check | implemented |
 
 ## Shared extensions: Git and files
 
 A real workflow commits, stages, branches, and moves files. Those are ordinary typed
-operations — pi-nobash simply does not bundle them, so you register the ones your agents need
-as small tools and select them per agent.
+operations — pi-nobash simply does not auto-load them, so you load or register the ones your
+agents need as small tools and select them per agent.
+
+`git_create_branch`, `git_add`, `git_commit`, `git_push`, `js_format_write`, and
+`py_format_write` are the shipped exceptions: they live in
+[`companions/`](../../companions/README.md), inert until loaded. Load a companion in place —
+its `../../src/…` imports break if the directory is copied out of the tree:
 
 ```sh
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts \
+pi install ./companions/git
+pi -e <repo>/companions/git
+```
+
+```sh
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts \
   --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete
 ```
 
-**Git mutations** (`my-git-tools.ts`):
+**Git mutations** (`companions/git`):
 
-| Tool | Input | Effect |
-|---|---|---|
-| `git_create_branch` | `{ name, startPoint?, switchTo? }` | create (and optionally switch to) a branch; `name` validated as a Git ref |
-| `git_add` | `{ paths }` \| `{ trackedOnly: true }` | stage named paths (file or directory) or all tracked modifications (`-u`); paths are literal |
-| `git_commit` | `{ message }` | commit the staged index; never stages and never `-a` |
-| `git_push` | `{ remote?, setUpstream? }` | push the current branch to a configured remote, non-force; `setUpstream: true` adds `--set-upstream` |
-| `git_rm_cached` *(deferred — P2)* | `{ paths }` | untrack paths but keep them on disk |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| [`git_create_branch`](../../companions/git/create-branch.ts) | `{ name, startPoint?, switchTo? }` | create (and optionally switch to) a branch; `name` validated as a Git ref | implemented |
+| [`git_add`](../../companions/git/add.ts) | `{ paths }` \| `{ trackedOnly: true }` | stage named paths (file or directory) or all tracked modifications (`-u`); paths are literal | implemented |
+| [`git_commit`](../../companions/git/commit.ts) | `{ message }` | commit the staged index; never stages and never `-a` | implemented |
+| [`git_push`](../../companions/git/push.ts) | `{ remote?, setUpstream? }` | push the current branch to a configured remote, non-force; `setUpstream: true` adds `--set-upstream` | implemented |
+| `git_rm_cached` *(deferred — P2)* | `{ paths }` | untrack paths but keep them on disk | proposed |
 
 Two staging modes ship, each a fixed invocation:
 
@@ -92,11 +105,11 @@ whose effect lands on a shared remote and is not undone by a local reset.
 
 **File lifecycle** (`my-fs-tools.ts`):
 
-| Tool | Input | Effect |
-|---|---|---|
-| `fs_copy` | `{ from, to }` | copy one path inside the workspace |
-| `fs_move` | `{ from, to }` | move or rename one path inside the workspace |
-| `fs_delete` | `{ path }` | delete one explicit path |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| `fs_copy` | `{ from, to }` | copy one path inside the workspace | proposed |
+| `fs_move` | `{ from, to }` | move or rename one path inside the workspace | proposed |
+| `fs_delete` | `{ path }` | delete one explicit path | proposed |
 
 Register each as its own tool so an agent gets exactly the operations it needs. Resolve every
 path against the session `cwd` and reject escapes and symlink traversal — pi-nobash's

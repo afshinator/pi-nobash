@@ -32,23 +32,23 @@ priority. Detail always lives in the linked document, not here.
 Planned and specified by
 [the companions implementation plan](./plans/pi-nobash-companions-implementation-plan.md)
 (`task-plan-4`); see also the
-[companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3. The items
-below are **not implemented** — each links its plan section; contracts (schemas,
-fixed argv, `details` shapes, tests) are frozen there (FD1–FD6).
+[companions handoff](./pi-nobash-stack-companions-handoff-2026-10-11.md) §3. Each item
+below links its plan section; contracts (schemas, fixed argv, `details` shapes, tests)
+are frozen there (FD1–FD6).
 
-- [ ] Shared Git mutations: `git_create_branch`, `git_add`, `git_commit`, `git_push` —
+- [x] Shared Git mutations: `git_create_branch`, `git_add`, `git_commit`, `git_push` —
       explicit-path staging only, non-force push to a configured remote, current branch
-      only, no refspec/upstream field in P0
-      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan))
-- [ ] `js_format_write` (Node/web and Expo; Prettier default, one-line Biome switch)
+      only, no refspec field; `setUpstream` is the single documented boolean
+      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan)) — 2026-10-14, `5e6ea18`
+- [x] `js_format_write` (Node/web and Expo; Prettier default, Biome switch via project config per FD5)
       and `py_format_write` (Ruff) — workspace-scoped, fixed argv
-      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan))
+      ([plan A2](./plans/pi-nobash-companions-implementation-plan.md#a2-p0-implementation-plan)) — 2026-10-14, `5e6ea18`
 - [x] Copyable `.pi/pi-nobash.json` templates (JS/TS npm + pnpm, Expo, Python venv + uv)
       — done by the planning run (`task-plan-4`), 2026-10-11:
       [docs/stacks/examples/](./stacks/examples/ts-node-npm.json) (5 files, Biome-clean)
-- [ ] Companion layout under `companions/` (GitHub-only reference source, never
-      auto-loaded by core) and the no-companion-on-core-load test
-      ([plan FD1/FD2, A6](./plans/pi-nobash-companions-implementation-plan.md#frozen-decisions))
+- [x] Companion layout under `companions/` (shipped reference source, never
+      auto-loaded by core; FD2) and the no-companion-on-core-load test
+      ([plan FD1/FD2, A6](./plans/pi-nobash-companions-implementation-plan.md#frozen-decisions)) — 2026-10-14, `5e6ea18`
 
 ## P1 — stack companions: lint fixes and dependencies
 

@@ -8,24 +8,26 @@ workflow needs. Shared background — the three layers, the Git and file extensi
 ## 1. Tool list
 
 ```sh
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-py-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,py_format_write,py_lint_fix,py_dep_add,py_dep_remove \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/python \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,py_format_write \
   --exclude-tools bash,powershell,codemode
+# py_lint_fix, py_dep_add, py_dep_remove are `proposed` (P1); they join this list when companions/python ships them
 ```
 
 What each tool is:
 
-| Tool | Source | Mutates | Purpose |
-|---|---|---|---|
-| `read` `grep` `find` `ls` | Pi native | no | read/search/list |
-| `edit` `write` | Pi native | yes | modify content |
-| `json_query` `query_jsonl` | pi-nobash | no | query coverage/JSON, structured logs |
-| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | inspect history and the working tree |
-| `run_validation` | pi-nobash | no | run the checks in §2 |
-| `git_create_branch` `git_add` `git_commit` `git_push` | your extension | yes | Git mutations |
-| `fs_copy` `fs_move` `fs_delete` | your extension | yes | file lifecycle |
-| `py_format_write` `py_lint_fix` | your extension | yes | formatter and safe lint fixes |
-| `py_dep_add` `py_dep_remove` | your extension | yes | dependency changes |
+| Tool | Source | Mutates | Purpose | Status |
+|---|---|---|---|---|
+| `read` `grep` `find` `ls` | Pi native | no | read/search/list | implemented |
+| `edit` `write` | Pi native | yes | modify content | implemented |
+| `json_query` `query_jsonl` | pi-nobash | no | query coverage/JSON, structured logs | implemented |
+| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | inspect history and the working tree | implemented |
+| `run_validation` | pi-nobash | no | run the checks in §2 | implemented |
+| [`git_create_branch`](../../companions/git/create-branch.ts) [`git_add`](../../companions/git/add.ts) [`git_commit`](../../companions/git/commit.ts) [`git_push`](../../companions/git/push.ts) | your extension | yes | Git mutations | implemented |
+| `fs_copy` `fs_move` `fs_delete` | your extension | yes | file lifecycle | proposed |
+| [`py_format_write`](../../companions/python/format-write.ts) | your extension | yes | formatter write mode | implemented |
+| `py_lint_fix` | your extension | yes | safe lint fixes | proposed |
+| `py_dep_add` `py_dep_remove` | your extension | yes | dependency changes | proposed |
 
 The `py_` prefix is deliberate: tool names are global to a session, so if a repo also loads
 the JS/TS or Rust extension there is no duplicate-name conflict.
@@ -63,14 +65,14 @@ instead — pick whichever is actually on `PATH` in the environment the agent ru
 ## 3. Extensions
 
 The Git and file tools are the shared ones in [Stack setups](./README.md#shared-extensions-git-and-files).
-Python adds `my-py-tools.ts`:
+Python adds `companions/python`:
 
-| Tool | Input | Effect |
-|---|---|---|
-| `py_format_write` | `{ paths: string[] }` | `ruff format <paths>` (write mode) |
-| `py_lint_fix` | `{ paths: string[] }` | `ruff check --fix <paths>` (safe fixes only, never `--unsafe-fixes`) |
-| `py_dep_add` | `{ packages: string[], dev?: boolean }` | `uv add [--dev] <pkgs>` (or `poetry add`, `pip install`) |
-| `py_dep_remove` | `{ packages: string[] }` | `uv remove <pkgs>` (or `poetry remove`, `pip uninstall`) |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| [`py_format_write`](../../companions/python/format-write.ts) | `{ paths: string[] }` | `ruff format <paths>` (write mode) | implemented |
+| `py_lint_fix` | `{ paths: string[] }` | `ruff check --fix <paths>` (safe fixes only, never `--unsafe-fixes`) | proposed |
+| `py_dep_add` | `{ packages: string[], dev?: boolean }` | `uv add [--dev] <pkgs>` (or `poetry add`, `pip install`) | proposed |
+| `py_dep_remove` | `{ packages: string[] }` | `uv remove <pkgs>` (or `poetry remove`, `pip uninstall`) | proposed |
 
 Same shape as every other mutation tool: fixed executable, validated workspace paths, direct
 spawn with `shell: false`, no model-supplied flags. The `py_dep_*` tools mutate the lockfile
@@ -94,9 +96,10 @@ spawn with `shell: false`, no model-supplied flags. The `py_dep_*` tools mutate 
 ## 5. Full launch
 
 ```sh
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-py-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,py_format_write,py_lint_fix,py_dep_add,py_dep_remove \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/python \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,py_format_write \
   --exclude-tools bash,powershell,codemode
+# py_lint_fix, py_dep_add, py_dep_remove are `proposed` (P1); they join this list when companions/python ships them
 ```
 
 Then the agent can read, search, edit, inspect Git, run pytest/mypy/ruff, fix formatting, and

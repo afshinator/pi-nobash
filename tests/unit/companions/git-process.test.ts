@@ -125,3 +125,46 @@ test("execFixed spawns fixed programs: every spawn is patchable and recorded", a
 	}
 	assert.deepEqual(seen, [["echo", "hi"]]);
 });
+
+test("execFixed byte cap is UTF-8 BYTES, not characters: 4-byte code points truncate at 25_000 chars", async () => {
+	// 30_000 emoji = 30_000 code points but 120_000 UTF-8 bytes. A character-
+	// counting cap would report 30_000 accepted chars (or accept 100_000 chars =
+	// 400_000 bytes); the byte cap must accept exactly 25_000 code points.
+	const EMOJI = "\u{1F600}";
+	const out = await execFixed(
+		NODE,
+		["-e", `process.stdout.write(${JSON.stringify(EMOJI)}.repeat(30000))`],
+		process.cwd(),
+	);
+	assert.equal(out.truncated, true);
+	assert.ok(
+		Buffer.byteLength(out.stdout, "utf8") <= 100_000,
+		`stdout ${Buffer.byteLength(out.stdout, "utf8")} bytes must be <= 100_000`,
+	);
+	const codePoints = [...out.stdout].length;
+	assert.equal(
+		codePoints,
+		25_000,
+		`a character cap would report 100_000 accepted chars; byte cap reports ${codePoints}`,
+	);
+	// Truncation never splits a code point: every accepted char is the emoji.
+	assert.ok(!out.stdout.includes("\uFFFD"));
+	for (const cp of out.stdout) assert.equal(cp, EMOJI);
+});
+
+test("execFixed byte cap: 2-byte chars overflow the byte cap far below 100_000 chars", async () => {
+	// 60_000 'e-acute' chars: a character cap would accept all 60_000 (120_000
+	// bytes over the limit); the byte cap stops at 50_000 chars / 100_000 bytes.
+	const out = await execFixed(
+		NODE,
+		["-e", 'process.stdout.write("\\u00e9".repeat(60000))'],
+		process.cwd(),
+	);
+	assert.equal(out.truncated, true);
+	assert.ok(
+		Buffer.byteLength(out.stdout, "utf8") <= 100_000,
+		`stdout ${Buffer.byteLength(out.stdout, "utf8")} bytes`,
+	);
+	assert.equal([...out.stdout].length, 50_000);
+	assert.ok(!out.stdout.includes("\uFFFD"));
+});

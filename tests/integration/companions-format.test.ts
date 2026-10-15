@@ -4,13 +4,18 @@
  *
  * - Biome runs from the repo's devDependency (`npx biome`, offline).
  * - Prettier resolves offline via `npx --no-install prettier` (verified 3.9.10).
- * - Ruff is NOT installed on this machine (no uv/pipx), so the Python case uses
- *   a deterministic `ruff` stub on PATH that rewrites the named file to known
- *   bytes and records its argv.
+ * - Ruff: two branches. When a real `ruff` is on PATH, py_format_write is
+ *   byte-diffed against the REAL Ruff output. When Ruff is absent (this
+ *   machine: no uv/pipx), the real branch SKIPS with a printed reason, and a
+ *   clearly-labelled STUB test (deterministic `ruff` shim on PATH) keeps the
+ *   argv/post-bytes plumbing covered. The stub never counts as a real-Ruff
+ *   pass.
  *   shortcut: stubbed Ruff; upgrade to a real-ruff byte-diff test when Ruff is
  *   available in the test environment.
  */
+
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
 	chmodSync,
 	mkdirSync,
@@ -110,6 +115,55 @@ async function runTool(
 
 const UNFORMATTED = "const   x=1\nfunction  f ( a ,b ) { return a+b }\n";
 
+/** Resolves a real `ruff` from PATH, or null (with reason) when absent. */
+function findRealRuff(): string | null {
+	try {
+		const p = execFileSync("which", ["ruff"], { stdio: "pipe" })
+			.toString()
+			.trim();
+		return p.length > 0 ? p : null;
+	} catch {
+		return null;
+	}
+}
+
+test("py_format_write (REAL ruff from PATH): exact post bytes, others untouched", {
+	timeout: 120_000,
+}, async (t) => {
+	const ruff = findRealRuff();
+	if (!ruff)
+		return t.skip(
+			"ruff not on PATH — real-Ruff byte-diff branch cannot run here (no ruff/uv installed)",
+		);
+
+	const ws = realpathSync(
+		mkdtempSync(path.join(tmpdir(), "pi-nobash-fmt-it-")),
+	);
+	dirs.push(ws);
+	writeCompanionConfig(ws, "ruff");
+	writeFileSync(path.join(ws, "a.py"), "x  =1\n");
+	const untouched = "y = 2\n";
+	writeFileSync(path.join(ws, "b.py"), untouched);
+
+	// Reference: what the real ruff produces for this fixture, run directly.
+	execFileSync(ruff, ["format", "--", path.join(ws, "a.py")], {
+		stdio: "pipe",
+	});
+	const expected = readFileSync(path.join(ws, "a.py"));
+
+	// Reset the fixture and run the SAME input through the tool instead.
+	writeFileSync(path.join(ws, "a.py"), "x  =1\n");
+	const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] });
+	assert.deepEqual(details, { formatted: ["a.py"], truncated: false });
+
+	// Tool output must be byte-identical to real-ruff output.
+	assert.ok(
+		expected.equals(readFileSync(path.join(ws, "a.py"))),
+		"post-bytes must equal real ruff format output",
+	);
+	assert.equal(readFileSync(path.join(ws, "b.py"), "utf8"), untouched);
+});
+
 test("js_format_write (biome): exact post bytes, others untouched, idempotent", {
 	timeout: 120_000,
 }, async () => {
@@ -156,7 +210,7 @@ test("js_format_write (prettier): exact post bytes, others untouched", {
 	assert.equal(readFileSync(path.join(ws, "tidy.ts"), "utf8"), untouched);
 });
 
-test("py_format_write (ruff stub): exact argv and post bytes, others untouched", {
+test("py_format_write (STUB ruff, not real Ruff): exact argv and post bytes, others untouched", {
 	timeout: 60_000,
 }, async () => {
 	const ws = realpathSync(

@@ -15,28 +15,31 @@ Identical for both, except Expo swaps the dependency tools for `expo_dep_add`.
 
 ```sh
 # Node / web
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-js-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,js_lint_fix,js_dep_add,js_dep_remove \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/javascript \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write \
   --exclude-tools bash,powershell,codemode
+# js_lint_fix, js_dep_add, js_dep_remove are `proposed` (P1); they join this list when companions/javascript ships them
 
-# React Native / Expo (adds my-expo-tools.ts, swaps the dependency tools)
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-js-tools.ts -e ./my-expo-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,js_lint_fix,expo_dep_add \
+# React Native / Expo (adds my-expo-tools.ts for the P1 dependency tool)
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/javascript -e ./my-expo-tools.ts \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,expo_dep_add \
   --exclude-tools bash,powershell,codemode
+# js_lint_fix is `proposed` (P1); it joins this list when companions/javascript ships it
 ```
 
-| Tool | Source | Mutates | Purpose |
-|---|---|---|---|
-| `read` `grep` `find` `ls` | Pi native | no | read/search/list |
-| `edit` `write` | Pi native | yes | modify content |
-| `json_query` `query_jsonl` | pi-nobash | no | query `package.json`, `app.json`, coverage JSON, JSONL logs |
-| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | inspect history and the working tree |
-| `run_validation` | pi-nobash | no | run the checks in §2 |
-| `git_create_branch` `git_add` `git_commit` `git_push` | your extension | yes | Git mutations (shared) |
-| `fs_copy` `fs_move` `fs_delete` | your extension | yes | file lifecycle (shared) |
-| `js_format_write` `js_lint_fix` | your extension | yes | formatter and safe lint fixes (both) |
-| `js_dep_add` `js_dep_remove` | your extension | yes | dependency changes (Node) |
-| `expo_dep_add` | your extension | yes | add an Expo-SDK-compatible dependency (Expo) |
+| Tool | Source | Mutates | Purpose | Status |
+|---|---|---|---|---|
+| `read` `grep` `find` `ls` | Pi native | no | read/search/list | implemented |
+| `edit` `write` | Pi native | yes | modify content | implemented |
+| `json_query` `query_jsonl` | pi-nobash | no | query `package.json`, `app.json`, coverage JSON, JSONL logs | implemented |
+| `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | inspect history and the working tree | implemented |
+| `run_validation` | pi-nobash | no | run the checks in §2 | implemented |
+| [`git_create_branch`](../../companions/git/create-branch.ts) [`git_add`](../../companions/git/add.ts) [`git_commit`](../../companions/git/commit.ts) [`git_push`](../../companions/git/push.ts) | your extension | yes | Git mutations (shared) | implemented |
+| `fs_copy` `fs_move` `fs_delete` | your extension | yes | file lifecycle (shared) | proposed |
+| [`js_format_write`](../../companions/javascript/format-write.ts) | your extension | yes | formatter write mode (both) | implemented |
+| `js_lint_fix` | your extension | yes | safe lint fixes (both) | proposed |
+| `js_dep_add` `js_dep_remove` | your extension | yes | dependency changes (Node) | proposed |
+| `expo_dep_add` | your extension | yes | add an Expo-SDK-compatible dependency (Expo) | proposed |
 
 The `js_`/`expo_` prefixes are deliberate: tool names are global to a session, so if a repo
 also loads the Python or Rust/Go extension there is no duplicate-name conflict.
@@ -108,20 +111,20 @@ If the repo uses **`node:test`**, add a targeted check so the agent can run one 
 ## 3. Extensions
 
 The Git and file tools are the shared ones in [Stack setups](./README.md#shared-extensions-git-and-files).
-Both variants use `my-js-tools.ts`:
+Both variants use `companions/javascript`:
 
-| Tool | Input | Effect |
-|---|---|---|
-| `js_format_write` | `{ paths: string[] }` | `biome format --write <paths>` / `prettier --write <paths>` |
-| `js_lint_fix` | `{ paths: string[] }` | `biome check --write <paths>` / `eslint --fix <paths>` (safe fixes only) |
-| `js_dep_add` | `{ packages: string[], dev?: boolean }` | `npm install [--save-dev] <pkgs>` (Node) |
-| `js_dep_remove` | `{ packages: string[] }` | `npm uninstall <pkgs>` (Node) |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| [`js_format_write`](../../companions/javascript/format-write.ts) | `{ paths: string[] }` | `biome format --write <paths>` / `prettier --write <paths>` | implemented |
+| `js_lint_fix` | `{ paths: string[] }` | `biome check --write <paths>` / `eslint --fix <paths>` (safe fixes only) | proposed |
+| `js_dep_add` | `{ packages: string[], dev?: boolean }` | `npm install [--save-dev] <pkgs>` (Node) | proposed |
+| `js_dep_remove` | `{ packages: string[] }` | `npm uninstall <pkgs>` (Node) | proposed |
 
 Expo adds `my-expo-tools.ts`:
 
-| Tool | Input | Effect |
-|---|---|---|
-| `expo_dep_add` | `{ packages: string[] }` | `npx expo install <pkgs>` — versions compatible with the project's Expo SDK |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| `expo_dep_add` | `{ packages: string[] }` | `npx expo install <pkgs>` — versions compatible with the project's Expo SDK | proposed |
 
 Why `expo_dep_add` is separate from `js_dep_add`: `npm install <pkg>` takes the latest
 version, which can silently break an Expo app by installing something the SDK doesn't
@@ -132,7 +135,7 @@ Shape of one of them — the rest follow the same pattern (fixed executable, val
 direct spawn, no shell):
 
 ```ts
-// my-js-tools.ts
+// my-js-tools.ts (shipped equivalent: companions/javascript/format-write.ts)
 import { spawnSync } from "node:child_process";
 import { Type } from "typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -201,14 +204,16 @@ and symlink traversal; `src/path-policy.ts` is the reference implementation.
 
 ```sh
 # Node / web
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-js-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,js_lint_fix,js_dep_add,js_dep_remove \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/javascript \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write \
   --exclude-tools bash,powershell,codemode
+# js_lint_fix, js_dep_add, js_dep_remove are `proposed` (P1); they join this list when companions/javascript ships them
 
 # React Native / Expo
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-js-tools.ts -e ./my-expo-tools.ts \
-  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,js_lint_fix,expo_dep_add \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/companions/javascript -e ./my-expo-tools.ts \
+  --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,js_format_write,expo_dep_add \
   --exclude-tools bash,powershell,codemode
+# js_lint_fix is `proposed` (P1); it joins this list when companions/javascript ships it
 ```
 
 Either way the agent reads, searches, edits, inspects Git, runs the checks, fixes formatting,

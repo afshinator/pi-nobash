@@ -33,12 +33,12 @@ spawned directly. If your toolchain's `cargo fmt --check` is unsupported, use
 
 ### `my-rust-tools.ts`
 
-| Tool | Input | Effect |
-|---|---|---|
-| `rust_format_write` | `{ paths: string[] }` | `cargo fmt` (whole workspace) or `rustfmt <paths>` |
-| `rust_dep_add` | `{ packages: string[], dev?: boolean }` | `cargo add [--dev] <pkgs>` (needs `cargo-edit`) |
-| `rust_dep_remove` | `{ packages: string[] }` | `cargo remove <pkgs>` (needs `cargo-edit`) |
-| `rust_clippy_fix` *(optional)* | `{ allowDirty?: boolean }` | `cargo clippy --fix --allow-dirty --allow-staged` — a mutation, keep it separate from `lint` |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| `rust_format_write` | `{ paths: string[] }` | `cargo fmt` (whole workspace) or `rustfmt <paths>` | proposed |
+| `rust_dep_add` | `{ packages: string[], dev?: boolean }` | `cargo add [--dev] <pkgs>` (needs `cargo-edit`) | proposed |
+| `rust_dep_remove` | `{ packages: string[] }` | `cargo remove <pkgs>` (needs `cargo-edit`) | proposed |
+| `rust_clippy_fix` *(optional)* | `{ allowDirty?: boolean }` | `cargo clippy --fix --allow-dirty --allow-staged` — a mutation, keep it separate from `lint` | proposed |
 
 ### Rust caveats
 
@@ -73,11 +73,11 @@ it can never fail. Either enable the `gofmt`/`gofumpt` linter inside `golangci-l
 
 ### `my-go-tools.ts`
 
-| Tool | Input | Effect |
-|---|---|---|
-| `go_format_write` | `{ paths: string[] }` | `gofmt -w <paths>` |
-| `go_mod_tidy` | `{}` | `go mod tidy` — rewrites `go.mod`/`go.sum` |
-| `go_dep_add` | `{ packages: string[] }` | `go get <pkgs>` |
+| Tool | Input | Effect | Status |
+|---|---|---|---|
+| `go_format_write` | `{ paths: string[] }` | `gofmt -w <paths>` | proposed |
+| `go_mod_tidy` | `{}` | `go mod tidy` — rewrites `go.mod`/`go.sum` | proposed |
+| `go_dep_add` | `{ packages: string[] }` | `go get <pkgs>` | proposed |
 
 Go has no "remove dependency" command: you drop the import and run `go_mod_tidy`, which is why
 it is its own tool rather than bundled into `go_dep_add`.
@@ -95,7 +95,7 @@ it is its own tool rather than bundled into `go_dep_add`.
 Rust:
 
 ```sh
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-rust-tools.ts \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e ./my-rust-tools.ts \
   --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,rust_format_write,rust_dep_add,rust_dep_remove \
   --exclude-tools bash,powershell,codemode
 ```
@@ -103,7 +103,7 @@ pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-rust-tools.ts
 Go:
 
 ```sh
-pi -e ./pi-nobash -e ./my-git-tools.ts -e ./my-fs-tools.ts -e ./my-go-tools.ts \
+pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e ./my-go-tools.ts \
   --tools read,grep,find,ls,edit,write,json_query,query_jsonl,git_status,git_diff,git_log,git_show,run_validation,git_create_branch,git_add,git_commit,git_push,fs_copy,fs_move,fs_delete,go_format_write,go_mod_tidy,go_dep_add \
   --exclude-tools bash,powershell,codemode
 ```
