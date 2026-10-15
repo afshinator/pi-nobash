@@ -348,7 +348,7 @@ test("a table entry missing the requested verb -> CAPABILITY_GAP with zero spawn
 	installSpawnInterceptor();
 	try {
 		calls.length = 0;
-		JS_PACKAGE_MANAGERS["broken"] = {
+		JS_PACKAGE_MANAGERS.broken = {
 			add: { program: "broken", args: ["add"] },
 		} as DepCommands; // no addDev, no remove
 		const addDev = envelope(
@@ -368,7 +368,7 @@ test("a table entry missing the requested verb -> CAPABILITY_GAP with zero spawn
 		assert.equal(remove.details.code, "CAPABILITY_GAP");
 		assert.equal(calls.length, 0);
 	} finally {
-		delete JS_PACKAGE_MANAGERS["broken"];
+		delete JS_PACKAGE_MANAGERS.broken;
 		restoreSpawn();
 	}
 });
