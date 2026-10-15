@@ -13,10 +13,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 import { JS_LINTERS, PY_LINTERS } from "../../../companions/config.ts";
-import { jsLintFix } from "../../../companions/javascript/lint-fix.ts";
-import { jsLintFixTool } from "../../../companions/javascript/lint-fix.ts";
-import { pyLintFix } from "../../../companions/python/lint-fix.ts";
-import { pyLintFixTool } from "../../../companions/python/lint-fix.ts";
+import {
+	jsLintFix,
+	jsLintFixTool,
+} from "../../../companions/javascript/lint-fix.ts";
+import {
+	pyLintFix,
+	pyLintFixTool,
+} from "../../../companions/python/lint-fix.ts";
 
 const dirs: string[] = [];
 function workspace(): string {
@@ -167,9 +171,7 @@ test("51 paths -> LIMIT_EXCEEDED with zero spawns", async () => {
 	calls.length = 0;
 	try {
 		const paths = Array.from({ length: 51 }, (_, i) => `f${i}.ts`);
-		const js = envelope(
-			await jsLintFix({ paths }, undefined, ws, "biome"),
-		);
+		const js = envelope(await jsLintFix({ paths }, undefined, ws, "biome"));
 		assert.equal(js.isError, true);
 		assert.equal(js.details.code, "LIMIT_EXCEEDED");
 		const py = envelope(
@@ -217,8 +219,7 @@ test("scope rejections: .., absolute, symlink escape, node_modules, option-like,
 				await jsLintFix({ paths: [p] }, undefined, ws, linter),
 			);
 			assert.equal(out.isError, true, `expected rejection for ${label}`);
-			if (forced !== "ANY")
-				assert.equal(out.details.code, forced, label);
+			if (forced !== "ANY") assert.equal(out.details.code, forced, label);
 			else
 				assert.ok(
 					["INVALID_ARGUMENT", "PATH_OUT_OF_SCOPE", "NOT_FOUND"].includes(
@@ -245,7 +246,10 @@ test("scope rejections: .., absolute, symlink escape, node_modules, option-like,
 test("linter exit 1 is a SUCCESS envelope with remainingIssues true; exit 0 -> false", async () => {
 	const ws = workspace();
 	writeFileSync(path.join(ws, "a.ts"), "export let x = 1;\n");
-	writeFileSync(path.join(ws, "u.ts"), "export const a = 1;\nexport const c = a == 1;\n");
+	writeFileSync(
+		path.join(ws, "u.ts"),
+		"export const a = 1;\nexport const c = a == 1;\n",
+	);
 	installSpawnInterceptor();
 	try {
 		scripted = fakeChild(1, "", "diagnostics remain");
@@ -271,7 +275,6 @@ test("linter exit 1 is a SUCCESS envelope with remainingIssues true; exit 0 -> f
 		assert.equal(py.isError, false);
 		assert.equal(py.details.remainingIssues, true);
 		assert.deepEqual(py.details.fixed, ["p.py"]);
-
 	} finally {
 		restoreSpawn();
 	}
@@ -324,11 +327,17 @@ test("schema audit — no backend/command/flag field in either lint-fix schema",
 				`${tool.name}: schema exposes "${forbidden}"`,
 			);
 		}
-		assert.equal(tool.name, jsLintFixTool === tool ? "js_lint_fix" : "py_lint_fix");
+		assert.equal(
+			tool.name,
+			jsLintFixTool === tool ? "js_lint_fix" : "py_lint_fix",
+		);
 		// details shape: exactly fixed/remainingIssues/truncated.
 		const detailKeys = collectKeys(tool.outputSchema);
 		for (const expected of ["fixed", "remainingIssues", "truncated"])
-			assert.ok(detailKeys.includes(expected), `${tool.name}.outputSchema.${expected}`);
+			assert.ok(
+				detailKeys.includes(expected),
+				`${tool.name}.outputSchema.${expected}`,
+			);
 	}
 });
 

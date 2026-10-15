@@ -42,7 +42,16 @@ const EXTENSIONS: Record<JsLinter, ReadonlySet<string>> = {
 		".jsonc",
 		".css",
 	]),
-	eslint: new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".mts", ".cts"]),
+	eslint: new Set([
+		".js",
+		".jsx",
+		".ts",
+		".tsx",
+		".mjs",
+		".cjs",
+		".mts",
+		".cts",
+	]),
 };
 
 const TIMEOUT_MS = 120_000;
