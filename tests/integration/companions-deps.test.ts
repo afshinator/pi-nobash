@@ -419,18 +419,31 @@ test("expo_dep_add (REAL expo): exact argv via the real CLI on an SDK project", 
 		'{\n  "name": "real-expo-fixture",\n  "version": "1.0.0",\n  "private": true\n}\n',
 	);
 	// `expo install` reads the project's installed `expo` module to choose an
-	// SDK-compatible version, so bootstrap the SDK first (registry-gated;
-	// measured ~9 s / 331 MB). This is what makes the branch a REAL check
-	// rather than a stub: on a project without the SDK, expo itself exits 1.
+	// SDK-compatible version, so bootstrap the SDK first. Install the MAJOR the
+	// installed CLI reports, not `latest`: on 2026-10-14 `expo@latest` resolved
+	// to a version whose `@expo/cli@^58.1.9` dependency was missing from the
+	// registry (ETARGET), while `expo@57` installed cleanly. Measured ~5-26 s /
+	// ~331 MB.
+	let sdkMajor = "";
+	try {
+		sdkMajor =
+			execFileSync(localExpo, ["--version"], { stdio: "pipe" })
+				.toString()
+				.trim()
+				.split(".")[0] ?? "";
+	} catch {
+		sdkMajor = "";
+	}
+	const expoSpec = /^\d+$/.test(sdkMajor) ? `expo@${sdkMajor}` : "expo";
 	try {
 		execFileSync(
 			"npm",
-			["install", "--ignore-scripts", "--no-audit", "--no-fund", "expo"],
+			["install", "--ignore-scripts", "--no-audit", "--no-fund", expoSpec],
 			{ cwd: ws, timeout: 180_000, stdio: "pipe" },
 		);
 	} catch {
 		return t.skip(
-			"could not install the expo SDK module (registry unreachable) — real-expo branch cannot run here",
+			`could not install the expo SDK module (${expoSpec}) — registry unreachable or the version is broken; real-expo branch cannot run here`,
 		);
 	}
 	const out = await runTool(registerExpoTools, ws, "expo_dep_add", {
