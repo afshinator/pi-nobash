@@ -85,6 +85,19 @@ version specifiers or URL/VCS forms; no model-supplied flags anywhere.
   - [ ] constrain workspace roots, output cardinality, `native` payload size, cancellation
   - [ ] review license, pinning/reproducibility, and adapt-vs-depend
 - [ ] Rust and Go mutation tools (`rust_format_write`, `go_format_write`, `go_mod_tidy`, dependency tools)
+- [ ] **Codemode: tool or excluded execution path? (evaluation).** Research
+      ["What is Codemode" (Armin Ronacher, 2026-10-06)](https://lucumr.pocoo.org/2026/10/6/codemode/)
+      and decide whether pi-nobash should support codemode as a tool/stack. Pi 1.0 exposes
+      codemode as LLM-issued JavaScript tool calls composed on the harness side in a
+      QuickJS/WASM sandbox (no network, no filesystem, no timers; enabled with
+      `defaultTools: ["+codemode"]` or MCP). Today pi-nobash treats codemode only as general
+      execution: it is in `KNOWN_GENERAL_EXECUTION_TOOLS` (`src/constants.ts`) and every stack
+      guide passes `--exclude-tools bash,powershell,codemode`. Resolve:
+  - [ ] does codemode reintroduce a generic execution route — can it reach `bash` or any non-frozen program once bash is excluded, or only the tools left active?
+  - [ ] or is it a bounded composition layer over the typed tools (like the `workflow` tool) that the no-bash model could safely allow?
+  - [ ] if supported, which tools may a codemode script see, and does model-authored codemode count as model-authored argv/config (PD6) or as bounded composition?
+  - [ ] verify Pi 1.1.0 codemode semantics and its interaction with `--exclude-tools`/`defaultActive` against the installed runtime, not the article
+  - [ ] record an adopt/adapt/defer decision with the smallest complete change, or why codemode stays excluded
 
 ## Known debt
 
