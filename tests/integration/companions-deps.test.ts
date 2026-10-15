@@ -572,13 +572,13 @@ test("py_dep_add (REAL uv): runs only when uv is on PATH, otherwise skips with t
 		'[project]\nname = "real-fixture"\nversion = "1.0.0"\nrequires-python = ">=3.11"\ndependencies = []\n',
 	);
 	const out = await runTool(registerPythonTools, ws, "py_dep_add", {
-		packages: ["is-number"],
+		packages: ["six"],
 	});
 	assert.equal(out.isError, false, out.text);
-	assert.deepEqual(out.details, { packages: ["is-number"], dev: false });
+	assert.deepEqual(out.details, { packages: ["six"], dev: false });
 	assert.ok(
-		readFileSync(path.join(ws, "pyproject.toml"), "utf8").includes("is-number"),
-		"is-number in pyproject.toml",
+		readFileSync(path.join(ws, "pyproject.toml"), "utf8").includes("six"),
+		"six in pyproject.toml",
 	);
 	assert.ok(existsSync(path.join(ws, "uv.lock")), "uv.lock exists");
 });
