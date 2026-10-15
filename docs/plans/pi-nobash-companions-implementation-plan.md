@@ -14,7 +14,7 @@ paths, primitives — reused by reference, not copied here),
 
 **Outputs owned by this plan:** companion source layout under `companions/`
 (proposed; not yet written), check templates in `docs/stacks/examples/` (written
-by this run), and the P0/P1 rows in `docs/TODO.md`.
+by this run), and the P0/P1 rows in the project tracker.
 
 ---
 
