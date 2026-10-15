@@ -26,6 +26,7 @@ priority. Detail always lives in the linked document, not here.
 - [x] Adoption README and linked guides split (validation, tool reference, design decisions, replacing Bash) — 2026-10-10, `0c5a0f6`
 - [x] `docs/stacks/` stack setups (TypeScript incl. Expo, Python, Rust/Go) — 2026-10-12, `96e5af1`
 - [x] Removed the superseded `docs/older/` revisions — 2026-10-12, `ab19ece`
+- [x] Renamed `docs/ROADMAP.md` to `docs/TODO.md`, ignored every `run-details/` repo-wide, checked in the remaining run configs, and deleted the merged `feat/companions-p0` branch — 2026-10-14, `947417e`
 
 ## P0 — stack companions: shared Git and formatters
 
@@ -109,17 +110,14 @@ version specifiers or URL/VCS forms; no model-supplied flags anywhere.
       printed reason otherwise: `npm`, `expo`, `uv`, `ruff`, `eslint`, `biome`. Verify with
       `npm test` (the skip list names the missing binary).
       `tests/integration/companions-deps.test.ts` — `expo_dep_add (REAL expo)` (line 399) —
-      bootstraps the SDK with `npm install expo` into a throwaway project on every run where
-      `expo` is on `PATH`; measured 331 MB in `node_modules` (~9 s here, 2026-10-14). If CI cost
+      bootstraps the SDK into a throwaway project with `npm install expo@<major>`, where the
+      major comes from `expo --version`; `expo@latest` was broken on 2026-10-14 (ETARGET
+      `@expo/cli@^58.1.9`), so the fixture pins the CLI's major. It runs on every run where
+      `expo` is on `PATH`; measured ~331 MB in `node_modules` (~5-26 s here). If CI cost
       matters, gate that branch behind an opt-in env var, mirroring `PI_NOBASH_LIVE_PROVIDER`
       (that provider-credential test is the only permanent skip; the rest are binary-gated).
       Local tooling used to exercise them: `uv` (Homebrew), `uv tool install ruff`,
       `npm install -g eslint expo`.
-- [ ] **Stale run state (2026-10-14).** `origin/feat/companions-p0` (`5e6ea18`) is merged and
-      deletable via `git push origin --delete feat/companions-p0`; the untracked
-      `.mypi/task-plan-4/session.yaml` and `.mypi/task-implement-3/session.yaml` are earlier run
-      configs in no commit (`git ls-files .mypi` shows task-harden-6 and
-      task-implement-1/2/5/7/8 tracked; decide track-or-drop for the two untracked).
 - [ ] `npm run fallow` reports 32 refactor targets (no correctness defects) — deferred
 - [ ] Assessment 411-vs-414 call-count discrepancy is unreconciled (needs the original transcripts)
 - [ ] Optional mutations beyond those listed above remain unplanned by design
