@@ -93,8 +93,9 @@ version specifiers or URL/VCS forms; no model-supplied flags anywhere.
       `defaultTools: ["+codemode"]` or MCP). Today pi-nobash treats codemode only as general
       execution: it is in `KNOWN_GENERAL_EXECUTION_TOOLS` (`src/constants.ts`) and every stack
       guide passes `--exclude-tools bash,powershell,codemode`. Resolve:
-  - [ ] does codemode reintroduce a generic execution route — can it reach `bash` or any non-frozen program once bash is excluded, or only the tools left active?
-  - [ ] or is it a bounded composition layer over the typed tools (like the `workflow` tool) that the no-bash model could safely allow?
+  - [ ] accepted: codemode reopens a generic execution route in principle (a script composes tool calls); the open question is how much the harness API narrows it. Determine from the installed Pi runtime and its source/docs — not the article — whether a codemode script sees only the active tools' typed schemas, or a generic escape (arbitrary tool names/argv, `bash`, authoring new tools at runtime)
+  - [ ] if the surface is typed, does that typing actually shrink the hallucinated-chaos surface versus raw bash, or is it cosmetic (any active tool callable with model-authored arguments)?
+  - [ ] can codemode reach `bash` or any non-frozen program once bash is excluded, or only the tools left active?
   - [ ] if supported, which tools may a codemode script see, and does model-authored codemode count as model-authored argv/config (PD6) or as bounded composition?
   - [ ] verify Pi 1.1.0 codemode semantics and its interaction with `--exclude-tools`/`defaultActive` against the installed runtime, not the article
   - [ ] record an adopt/adapt/defer decision with the smallest complete change, or why codemode stays excluded
