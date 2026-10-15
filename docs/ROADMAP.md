@@ -59,10 +59,12 @@ safe-mode lint fixes only (no `--unsafe-fixes`, never via `run_validation`);
 plain npm; Python deps on uv only; every package name grammar-validated with no
 version specifiers or URL/VCS forms; no model-supplied flags anywhere.
 
-- [ ] `js_lint_fix` (Biome/ESLint safe fixes), `py_lint_fix` (`ruff check --fix`);
-      unsafe modes stay a separate, unconsidered P2
-- [ ] `js_dep_add`, `js_dep_remove` (npm), `expo_dep_add` (`npx expo install`)
-- [ ] `py_dep_add`, `py_dep_remove` (uv only; Poetry/pipenv/pip are `CAPABILITY_GAP`)
+- [x] `js_lint_fix` (Biome/ESLint safe fixes), `py_lint_fix` (`ruff check --fix`);
+      unsafe modes stay a separate, unconsidered P2 — 2026-10-14, `b583700`
+- [x] `js_dep_add`, `js_dep_remove` (npm), `expo_dep_add` (`npx expo install`)
+      — 2026-10-14, `2585131`
+- [x] `py_dep_add`, `py_dep_remove` (uv only; Poetry/pipenv/pip are `CAPABILITY_GAP`)
+      — 2026-10-14, `2585131`
 
 ## P2 — deferred
 

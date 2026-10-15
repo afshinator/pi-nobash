@@ -814,9 +814,11 @@ git fixtures live in temp dirs; bare remotes are throwaway `git init --bare`.
 
 - **`CAPABILITY_GAP` not shell fallback — three distinct cases per companion:**
   1. **Unexpressible operation** — a request the selected schema cannot express
-     at all (stage-everything for `git_add`, force push, install
-     `pkg@version`) MUST return `CAPABILITY_GAP` (FD4 / handoff D6) — never
-     another code, never a shell or generic-runner fallback.
+     at all (stage-everything for `git_add`, force push, an unsupported package
+     manager request) MUST return `CAPABILITY_GAP` (FD4 / handoff D6) — never
+     another code, never a shell or generic-runner fallback. A name-form
+     violation such as `pkg@version`, `pkg@next`, or `github:user/repo` is
+     `INVALID_ARGUMENT` (A3), not `CAPABILITY_GAP`.
   2. **Malformed or out-of-scope input** to a supported operation returns the
      typed input/scope code: `INVALID_ARGUMENT`, `PATH_OUT_OF_SCOPE`, or
      `LIMIT_EXCEEDED`.
