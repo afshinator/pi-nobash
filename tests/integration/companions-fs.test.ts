@@ -3,6 +3,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -36,6 +37,25 @@ const file = (ws: string, rel: string, content: string) => {
 const bytes = (ws: string, rel: string) =>
 	readFileSync(path.join(ws, rel)).toString();
 
+/** Sorted { path, bytes } for every regular file under root; symlinks are never followed. */
+function snapshotTree(root: string): { path: string; bytes: string }[] {
+	const out: { path: string; bytes: string }[] = [];
+	const walk = (dir: string, prefix: string): void => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (entry.isSymbolicLink()) continue;
+			const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+			if (entry.isDirectory()) walk(path.join(dir, entry.name), rel);
+			else if (entry.isFile())
+				out.push({
+					path: rel,
+					bytes: readFileSync(path.join(dir, entry.name)).toString(),
+				});
+		}
+	};
+	walk(root, "");
+	return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
 /** Error code from the returned envelope (expected failures never throw). */
 async function errCode(fn: () => Promise<unknown>): Promise<{
 	code: string;
@@ -63,9 +83,10 @@ test("registration: registerFileTools exposes only fs_copy/fs_move, defaultActiv
 	for (const t of tools) assert.equal(t.defaultActive, false);
 });
 
-test("fs_copy: copies one regular file byte-for-byte; source and unrelated files untouched", async () => {
+test("fs_copy: exact tree — only the destination is added; source and unrelated files byte-identical", async () => {
 	const ws = workspace();
 	file(ws, "src/a.txt", "alpha-bytes\n");
+	file(ws, "src/nested/deep.txt", "deep\n");
 	mkdirSync(path.join(ws, "dst"));
 	file(ws, "other.txt", "untouched\n");
 	const recorder = recordSpawns();
@@ -77,9 +98,12 @@ test("fs_copy: copies one regular file byte-for-byte; source and unrelated files
 			details: { from: string; to: string };
 		};
 		assert.deepEqual(r.details, { from: "src/a.txt", to: "dst/b.txt" });
-		assert.equal(bytes(ws, "dst/b.txt"), "alpha-bytes\n");
-		assert.equal(bytes(ws, "src/a.txt"), "alpha-bytes\n");
-		assert.equal(bytes(ws, "other.txt"), "untouched\n");
+		assert.deepEqual(snapshotTree(ws), [
+			{ path: "dst/b.txt", bytes: "alpha-bytes\n" },
+			{ path: "other.txt", bytes: "untouched\n" },
+			{ path: "src/a.txt", bytes: "alpha-bytes\n" },
+			{ path: "src/nested/deep.txt", bytes: "deep\n" },
+		]);
 		assert.equal(recorder.spawns.length, 0);
 	} finally {
 		recorder.restore();
@@ -197,9 +221,11 @@ test("fs_move: missing destination parent is NOT_FOUND; the parent is not create
 	assert.ok(!existsSync(path.join(ws, "no-such-dir")));
 });
 
-test("fs_move: renames a directory in place — same inode, no content copy", async () => {
+test("fs_move: directory rename is an exact tree move — old paths gone, new paths byte-identical", async () => {
 	const ws = workspace();
 	file(ws, "proj/inner.txt", "inside\n");
+	file(ws, "proj/sub/deep.txt", "deep\n");
+	file(ws, "other.txt", "untouched\n");
 	const inoBefore = statSync(path.join(ws, "proj")).ino;
 	const recorder = recordSpawns();
 	try {
@@ -211,25 +237,29 @@ test("fs_move: renames a directory in place — same inode, no content copy", as
 			inoBefore,
 			"directory inode must be preserved (rename, not copy)",
 		);
-		assert.equal(bytes(ws, "renamed/inner.txt"), "inside\n");
-		assert.ok(!existsSync(path.join(ws, "proj")));
+		assert.deepEqual(snapshotTree(ws), [
+			{ path: "other.txt", bytes: "untouched\n" },
+			{ path: "renamed/inner.txt", bytes: "inside\n" },
+			{ path: "renamed/sub/deep.txt", bytes: "deep\n" },
+		]);
 		assert.equal(recorder.spawns.length, 0);
 	} finally {
 		recorder.restore();
 	}
 });
 
-test("fs_move: existing destination is CAPABILITY_GAP 'overwrite mode', dest bytes unchanged", async () => {
+test("fs_move: existing destination refusal leaves the entire tree unchanged", async () => {
 	const ws = workspace();
 	file(ws, "src.txt", "new\n");
 	file(ws, "dst.txt", "original-bytes\n");
+	file(ws, "unrelated/deep.txt", "untouched\n");
+	const before = snapshotTree(ws);
 	const e = await errCode(() =>
 		executeMove({ from: "src.txt", to: "dst.txt" }, ws),
 	);
 	assert.equal(e.code, "CAPABILITY_GAP");
 	assert.equal(e.capability, "overwrite mode");
-	assert.equal(bytes(ws, "dst.txt"), "original-bytes\n");
-	assert.equal(bytes(ws, "src.txt"), "new\n");
+	assert.deepEqual(snapshotTree(ws), before);
 });
 
 test("fs_move: missing source is NOT_FOUND; unsupported keys are CAPABILITY_GAP", async () => {
