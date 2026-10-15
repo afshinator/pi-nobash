@@ -5,7 +5,8 @@
  * arg audit (F8).
  *
  * A STUB never counts as a real-binary pass: stub tests are named "STUB" and
- * the real-Ruff branch skips (it cannot pass) when ruff is absent.
+ * the real-Ruff and real-ESLint branches skip (they cannot pass) when the
+ * binary is absent.
  */
 
 import assert from "node:assert/strict";
@@ -301,6 +302,62 @@ test("py_lint_fix (REAL ruff from PATH): exact post bytes", {
 	assert.ok(
 		expected.equals(readFileSync(path.join(ws, "a.py"))),
 		"post-bytes must equal real ruff check --fix output",
+	);
+});
+
+test("js_lint_fix (REAL eslint from PATH): exact post bytes with javascript.linter=eslint", {
+	timeout: 120_000,
+}, async (t) => {
+	let eslint = "";
+	try {
+		eslint = execFileSync("which", ["eslint"], { stdio: "pipe" })
+			.toString()
+			.trim();
+	} catch {
+		eslint = "";
+	}
+	if (!eslint)
+		return t.skip(
+			"eslint not on PATH — real-ESLint lint-fix branch cannot run here; STUB test covers the argv plumbing",
+		);
+
+	const ws = realpathSync(
+		mkdtempSync(path.join(tmpdir(), "pi-nobash-lint-it-")),
+	);
+	dirs.push(ws);
+	writeCompanionConfig(ws, jsLinterConfig("eslint"));
+	// ESLint 10 flat config with a fixable core rule. A plain .js fixture so
+	// espree parses it without a TypeScript parser.
+	writeFileSync(
+		path.join(ws, "eslint.config.js"),
+		[
+			"module.exports = [",
+			"  {",
+			'    languageOptions: { sourceType: "module", ecmaVersion: "latest" },',
+			'    rules: { semi: ["error", "always"] },',
+			"  },",
+			"];",
+			"",
+		].join("\n"),
+	);
+	writeFileSync(path.join(ws, "a.js"), "export const x = 1\n");
+
+	// Reference: what the real eslint produces under this config, run directly.
+	execFileSync(eslint, ["--fix", "--", path.join(ws, "a.js")], {
+		cwd: ws,
+		stdio: "pipe",
+	});
+	const expected = readFileSync(path.join(ws, "a.js"));
+	assert.equal(expected.toString("utf8"), "export const x = 1;\n");
+
+	writeFileSync(path.join(ws, "a.js"), "export const x = 1\n");
+	const out = await runTool(registerJsTools, ws, "js_lint_fix", {
+		paths: ["a.js"],
+	});
+	assert.equal(out.isError, false, out.text);
+	assert.ok(
+		expected.equals(readFileSync(path.join(ws, "a.js"))),
+		"post-bytes must equal real eslint --fix output",
 	);
 });
 
