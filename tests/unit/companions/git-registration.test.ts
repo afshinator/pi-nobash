@@ -34,7 +34,13 @@ test("registerGitMutationTools registers exactly the git mutation tools", () => 
 	const tools = collectTools();
 	assert.deepEqual(
 		tools.map((t) => t.name).sort(),
-		["git_add", "git_commit", "git_create_branch", "git_push"].sort(),
+		[
+			"git_add",
+			"git_commit",
+			"git_create_branch",
+			"git_push",
+			"git_rm_cached",
+		].sort(),
 	);
 });
 
@@ -51,7 +57,7 @@ test("every git mutation tool: direct exposure, inactive by default, one-line pr
 	}
 });
 
-test("every git mutation tool mutates (readOnlyHint false); only git_push is destructive", () => {
+test("every git mutation tool mutates (readOnlyHint false); git_push and git_rm_cached are destructive", () => {
 	for (const tool of collectTools()) {
 		assert.equal(
 			tool.annotations?.readOnlyHint,
@@ -60,8 +66,8 @@ test("every git mutation tool mutates (readOnlyHint false); only git_push is des
 		);
 		assert.equal(
 			tool.annotations?.destructiveHint === true,
-			tool.name === "git_push",
-			`destructiveHint must be true only on git_push (${tool.name})`,
+			tool.name === "git_push" || tool.name === "git_rm_cached",
+			`destructiveHint must be true only on git_push and git_rm_cached (${tool.name})`,
 		);
 	}
 });

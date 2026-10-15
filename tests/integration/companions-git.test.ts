@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { executeAdd } from "../../companions/git/add.ts";
 import { executeCommit } from "../../companions/git/commit.ts";
 import { executeCreateBranch } from "../../companions/git/create-branch.ts";
 import { executePush } from "../../companions/git/push.ts";
+import { executeRmCached } from "../../companions/git/rm-cached.ts";
 import {
 	createBareRemote,
 	createTempGitRepo,
@@ -324,4 +332,139 @@ test("git_push: argv is always git push [--set-upstream] <remote> <branch> — e
 		rec.spawns.some(({ args }) => args[0] === "push"),
 		"expected at least one push spawn",
 	);
+});
+
+test("git_rm_cached: untracks a tracked file, working-tree bytes unchanged", async () => {
+	const r = createTempGitRepo();
+	try {
+		mkdirSync(path.dirname(path.join(r.dir, "notes/keep.md")), {
+			recursive: true,
+		});
+		writeFileSync(path.join(r.dir, "notes/keep.md"), "keep-bytes\n");
+		gitIn(r.dir, ["add", "notes/keep.md"]);
+		gitIn(r.dir, ["commit", "-m", "track keep"]);
+		const before = readFileSync(path.join(r.dir, "notes/keep.md"));
+		const result = (await unwrap(
+			executeRmCached({ paths: ["notes/keep.md"] }, undefined, r.dir),
+		)) as { details: { removed: string[] } };
+		assert.deepEqual(result.details.removed, ["notes/keep.md"]);
+		assert.equal(gitIn(r.dir, ["ls-files", "notes/keep.md"]), "");
+		assert.deepEqual(readFileSync(path.join(r.dir, "notes/keep.md")), before);
+		assert.ok(existsSync(path.join(r.dir, "notes/keep.md")));
+	} finally {
+		r.cleanup();
+	}
+});
+
+test("git_rm_cached: a directory path removes its index subtree, files intact on disk", async () => {
+	const r = createTempGitRepo();
+	try {
+		mkdirSync(path.join(r.dir, "sub/deep"), { recursive: true });
+		writeFileSync(path.join(r.dir, "sub/deep/x.txt"), "x\n");
+		writeFileSync(path.join(r.dir, "sub/y.txt"), "y\n");
+		gitIn(r.dir, ["add", "sub"]);
+		gitIn(r.dir, ["commit", "-m", "track sub"]);
+		const result = (await unwrap(
+			executeRmCached({ paths: ["sub"] }, undefined, r.dir),
+		)) as { details: { removed: string[] } };
+		assert.deepEqual(result.details.removed.sort(), [
+			"sub/deep/x.txt",
+			"sub/y.txt",
+		]);
+		assert.equal(gitIn(r.dir, ["ls-files", "sub"]), "");
+		assert.equal(readFileSync(path.join(r.dir, "sub/y.txt"), "utf8"), "y\n");
+		assert.equal(
+			readFileSync(path.join(r.dir, "sub/deep/x.txt"), "utf8"),
+			"x\n",
+		);
+	} finally {
+		r.cleanup();
+	}
+});
+
+test("git_rm_cached: path absent from the index is GIT_FAILED, index unchanged", async () => {
+	const r = createTempGitRepo();
+	try {
+		writeFileSync(path.join(r.dir, "never-committed.txt"), "n\n");
+		assert.equal(
+			await errCode(() =>
+				executeRmCached({ paths: ["never-committed.txt"] }, undefined, r.dir),
+			),
+			"GIT_FAILED",
+		);
+		// mixed: one tracked, one untracked -> git rm fails, tracked entry stays
+		assert.equal(
+			await errCode(() =>
+				executeRmCached(
+					{ paths: ["README.md", "never-committed.txt"] },
+					undefined,
+					r.dir,
+				),
+			),
+			"GIT_FAILED",
+		);
+		assert.ok(gitIn(r.dir, ["ls-files", "README.md"]).includes("README.md"));
+	} finally {
+		r.cleanup();
+	}
+});
+
+test("git_rm_cached: CAPABILITY_GAP forms (-A, glob, force, extra key) reject with zero spawns", async () => {
+	const { recordSpawns } = await import("../helpers/companion-harness.ts");
+	const rec = recordSpawns();
+	try {
+		for (const p of ["-A", "--force", "*.ts", "."]) {
+			assert.equal(
+				await errCode(() =>
+					executeRmCached({ paths: [p] }, undefined, process.cwd()),
+				),
+				"CAPABILITY_GAP",
+				p,
+			);
+		}
+		assert.equal(
+			await errCode(() =>
+				executeRmCached(
+					{ force: true, paths: ["README.md"] } as never,
+					undefined,
+					process.cwd(),
+				),
+			),
+			"CAPABILITY_GAP",
+			"force key",
+		);
+	} finally {
+		rec.restore();
+	}
+	assert.equal(
+		rec.spawns.length,
+		0,
+		`expected zero spawns: ${JSON.stringify(rec.spawns)}`,
+	);
+});
+
+test("git_rm_cached: the only rm spawn is exactly git rm -r --cached -- <paths> with literal pathspecs", async () => {
+	const r = createTempGitRepo();
+	const { recordSpawns } = await import("../helpers/companion-harness.ts");
+	const rec = recordSpawns();
+	try {
+		writeFileSync(path.join(r.dir, "tracked.txt"), "t\n");
+		gitIn(r.dir, ["add", "tracked.txt"]);
+		gitIn(r.dir, ["commit", "-m", "t"]);
+		await unwrap(executeRmCached({ paths: ["tracked.txt"] }, undefined, r.dir));
+	} finally {
+		rec.restore();
+		r.cleanup();
+	}
+	const rmSpawn = rec.spawns.find(({ args }) => args[0] === "rm");
+	assert.ok(rmSpawn, "expected exactly one rm spawn");
+	assert.deepEqual(rmSpawn.args, ["rm", "-r", "--cached", "--", "tracked.txt"]);
+	assert.equal(rmSpawn.program, "git");
+	for (const { args } of rec.spawns) {
+		assert.ok(
+			!args.some(
+				(a) => a === "--force" || a === "-f" || a === "--ignore-unmatch",
+			),
+		);
+	}
 });
