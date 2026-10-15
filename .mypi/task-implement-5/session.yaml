@@ -9,7 +9,7 @@
 #
 # Write scope: companions/**, tests/**, and package.json ONLY if the FD5 config
 # mechanism requires it. src/ and extensions/ (core) must NOT change. Docs
-# relabeling (docs/stacks/*.md, docs/ROADMAP.md) is a separate follow-up run.
+# relabeling (docs/stacks/*.md, docs/TODO.md) is a separate follow-up run.
 #
 # Budget: session.max_cost_usd 3.00 is the global PEER-spend ceiling. Supervisor
 # usage is tracked and reported in final.md but NOT enforced against it
@@ -61,7 +61,7 @@ session:
       stay the single `./extensions/pi-nobash.ts` entry).
     - Core behaviour in src/ and extensions/ MUST NOT change. A diff touching
       src/ or extensions/ is a failed run.
-    - Do NOT edit docs/ (docs/stacks/*.md, docs/ROADMAP.md) this run; the docs
+    - Do NOT edit docs/ (docs/stacks/*.md, docs/TODO.md) this run; the docs
       relabel is a separate follow-up. companions/README.md IS in scope and must
       end up describing shipped code, not planned code.
     - Do NOT implement any P1 tool (js_lint_fix, py_lint_fix, js_dep_add,

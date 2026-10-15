@@ -14,7 +14,7 @@ paths, primitives — reused by reference, not copied here),
 
 **Outputs owned by this plan:** companion source layout under `companions/`
 (proposed; not yet written), check templates in `docs/stacks/examples/` (written
-by this run), and the P0/P1 rows in `docs/ROADMAP.md`.
+by this run), and the P0/P1 rows in `docs/TODO.md`.
 
 ---
 
@@ -721,7 +721,7 @@ envelope, bounds). Safe-mode-first, fixed backends, no model flags.
 **No Go integration was built or will be built by this run.** The evaluation
 question — adopt, adapt, or defer
 [`mcp-server-go-quality`](https://github.com/afshinator/mcp-server-go-quality)
-as a Go diagnostics companion — is recorded on the ROADMAP Later/Evaluation
+as a Go diagnostics companion — is recorded on the TODO Later/Evaluation
 list with the full seven-item review checklist from handoff §6:
 
 1. automatic `install_tools` must never be exposed as a read-only check or run
@@ -886,7 +886,7 @@ machinery.
 ## DoD for this plan (checked)
 
 - [x] All three outputs exist: this plan; `docs/stacks/examples/*.json` (5
-      templates, Biome-clean); ROADMAP P0/P1 rows updated.
+      templates, Biome-clean); TODO P0/P1 rows updated.
 - [x] Every P0/P1 item names goal + AC + lever (Goal reconciliation table).
 - [x] Frozen decisions with rejected alternatives (FD1–FD6 + PD7).
 - [x] A4 section named exactly `Deferred: A4 Go diagnostics reuse`; no Go

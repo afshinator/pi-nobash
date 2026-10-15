@@ -16,7 +16,7 @@
 #   G2  py_format_write's byte-diff runs a stub `ruff` (no ruff/uv on this box).
 #   G3  A RED test once executed a real `git push` (no-op); nothing asserts the
 #       suite cannot reach a real remote.
-#   G4  A5/M4 docs relabel (docs/stacks Status labels, ROADMAP P0 rows) deferred.
+#   G4  A5/M4 docs relabel (docs/stacks Status labels, TODO P0 rows) deferred.
 #   G5  task-implement-5's config is now invalid (session.attester became
 #       required after that run), so this run carries a current config.
 #
@@ -72,7 +72,7 @@ session:
     - Preserve conversation.jsonl and tool-calls.jsonl.
 
     WRITE SCOPE (hard):
-    - Allowed: tests/**, docs/stacks/*.md, docs/ROADMAP.md, companions/README.md,
+    - Allowed: tests/**, docs/stacks/*.md, docs/TODO.md, companions/README.md,
       and .mypi/task-harden-6/** run state.
     - Do NOT change companion tool behaviour in companions/** (process.ts, git/**,
       config.ts, javascript/**, python/**) and do NOT change src/ or extensions/.
@@ -95,7 +95,7 @@ session:
       remote).
     - G4: relabel docs/stacks/*.md tool tables with an implemented-vs-proposed
       Status column linking the shipped companions, mark the P0 rows in
-      docs/ROADMAP.md done, and assert every relative link in docs/stacks/*.md
+      docs/TODO.md done, and assert every relative link in docs/stacks/*.md
       resolves.
     - G5: keep the config current (version 1.2, attester set) for any later run.
 
@@ -115,7 +115,7 @@ session:
       byte-cap proof, and the docs/stacks link-resolution test that asserts G4.
       Write the E2E test first (RED), then the smallest helper.
     - scribe (deepseek/deepseek-flash; read/edit, no shell) owns docs/stacks/*.md
-      and docs/ROADMAP.md: G4. Do not touch tests/.
+      and docs/TODO.md: G4. Do not touch tests/.
     - reviewer (gpt-6-luna; read-only, shell on with exactly one allowed command:
       `npx biome check .`) is the designated attester. It reads the actual files,
       runs that one command, and attests each DoD criterion verbatim in the fenced
@@ -184,7 +184,7 @@ ask:
     real remote; (4) prove process.ts's 100 KB per-stream cap is byte-accurate and
     Node-version independent; (5) relabel docs/stacks/*.md with an
     implemented-vs-proposed Status column linking the shipped companions, mark the
-    P0 rows in docs/ROADMAP.md done, and assert docs/stacks links resolve. Keep
+    P0 rows in docs/TODO.md done, and assert docs/stacks links resolve. Keep
     src/ and extensions/ unchanged and keep npm run typecheck, npm test, and
     npx biome check . green.
   definition_of_done:
@@ -193,7 +193,7 @@ ask:
     - "The Python formatter byte-diff resolves a real `ruff` from PATH and asserts exact post-bytes when it is present; when ruff is absent the test skips with the reason printed, and every stub is named as a stub in the test title and file header."
     - "A guard test proves the companion git suite cannot reach a real remote: every push fixture uses a throwaway bare repo or a temp path, and a scan or spawn interception shows no test invokes git push against a non-throwaway remote."
     - "A deterministic multi-byte fixture proves process.ts enforces the 100 KB per-stream cap in bytes rather than characters independently of the Node version, and it fails if the cap counts characters."
-    - "docs/stacks/*.md tool tables carry an implemented-versus-proposed Status label and link the shipped companions, docs/ROADMAP.md marks the P0 rows done, and every relative link in docs/stacks/*.md resolves to a file that exists (asserted by a test)."
+    - "docs/stacks/*.md tool tables carry an implemented-versus-proposed Status label and link the shipped companions, docs/TODO.md marks the P0 rows done, and every relative link in docs/stacks/*.md resolves to a file that exists (asserted by a test)."
     - "src/ and extensions/ are unchanged, and npm run typecheck, npm test, and npx biome check . all exit 0 on the run's tree."
     - "The reviewer independently ran `npx biome check .` on the final tree and its exact result is recorded in run-details/plan.md; any issue it reported was fixed by the owning peer with a clean re-run, or recorded as an explicit open finding with the reason."
     - "Every implementation, refactor, code/document change, and architecture choice in this run has a Ponytail reconciliation recorded in run-details/plan.md naming the smallest complete design and what was deliberately skipped, and the reviewer confirms each is non-vacuous."
@@ -253,11 +253,11 @@ agents:
       shell: false
     max_cost_usd: 0.40
     system_prompt: |
-      You own docs/stacks/*.md and docs/ROADMAP.md only. Do not touch tests/,
+      You own docs/stacks/*.md and docs/TODO.md only. Do not touch tests/,
       companions/**, src/, or extensions/.
 
       Read docs/plans/pi-nobash-companions-implementation-plan.md A5 (items 1-4, 7),
-      docs/ROADMAP.md, and the shipped code under companions/ (P0 shipped;
+      docs/TODO.md, and the shipped code under companions/ (P0 shipped;
       P1 planned). Then:
       - Give every tool table in docs/stacks/{README,typescript,python,rust-go}.md
         a Status column with exactly: `core` (shipped in src/), `companion —
@@ -269,7 +269,7 @@ agents:
         not shipped, so links from shipped markdown out to docs must stay absolute
         (tests/unit/readme-links.test.ts guards that) — but links *inside*
         docs/stacks must resolve to real files.
-      - Mark the P0 rows in docs/ROADMAP.md done, dating them and naming the merge
+      - Mark the P0 rows in docs/TODO.md done, dating them and naming the merge
         commit 5e6ea18; leave the P1 row blocked on implementation.
       Keep edits factual and minimal; do not restate schemas that live in the plan
       (link them). You have NO shell permission, so you cannot run `npx biome check .`
@@ -306,7 +306,7 @@ agents:
         reason; no test claims a real-Ruff pass while running the stub.
       - The remote-isolation guard is non-vacuous (it would catch a real remote).
       - The byte-cap test fails if the cap counts characters (read the fixture).
-      - docs/stacks Status labels match the shipped companions; ROADMAP P0 rows
+      - docs/stacks Status labels match the shipped companions; TODO P0 rows
         are done; docs/stacks relative links resolve.
       - Write scope: src/ and extensions/ unchanged; no P1 tool added.
       - ponytail: every change and architecture choice in plan.md has a

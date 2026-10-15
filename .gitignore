@@ -1,3 +1,6 @@
 node_modules/
 *.tsbuildinfo
 .DS_Store
+
+# Per-task run state (plan.md, final.md, findings.md, logs) is never tracked.
+**/run-details/

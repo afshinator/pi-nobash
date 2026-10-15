@@ -1,0 +1,408 @@
+# Save as pi-nobash/.mypi/task-implement-3/session.yaml.
+# Launch the supervisor from the pi-nobash repository root.
+# Source files live in the repository; all run state lives alongside this YAML
+# under .mypi/task-implement-3/run-details/.
+#
+# This is a DEVELOPMENT run. Engineers may use Bash while BUILDING pi-nobash.
+# No-Bash restrictions apply to the product being built and its acceptance tests,
+# not to the engineering agents' development tools.
+#
+# Budget (current run-3 values; the old 4-peer $4.25/$5 plan no longer applies):
+# - session.max_cost_usd: 2.50 is the global PEER-spend ceiling. Supervisor
+#   usage is tracked and reported in final.md but NOT enforced against it, so
+#   realistic all-agent spend can reach ~$2.80 (run 1 supervisor $0.30, run 2 $0.10).
+# - Peers: pi_core $1.90 + reviewer $0.60 = $2.50, so the sum of peer caps
+#   equals the session ceiling.
+# - agent_stop_threshold_percent: 100, so a peer may spend its full allocation
+#   before it is stopped. The token bound is only checked when that agent sets
+#   max_tokens; neither peer sets it here.
+version: "1.1"
+
+session:
+  id: "task-implement-3"
+  supervisor_model: "deepseek/deepseek-flash"
+  max_cost_usd: 2.50
+  agent_stop_threshold_percent: 100
+  heartbeat_timeout_ms: 5000
+  peer_prompt_timeout_ms: 600000
+  peer_retry_pause_ms: 10000
+  peer_max_retries: 2
+  supervisor_system_prompt: |
+    You are the implementation supervisor for pi-nobash. Coordinate the two
+    specialized peers for this cleanup run. Keep your own model usage modest: dispatch concrete
+    work orders, avoid duplicating code review or implementation, and reconcile
+    results with the product Definition of Done.
+
+    Workspace and artifacts:
+    - Run from the pi-nobash repository root. Implementation goes in the
+      repository's package/source/test tree, NOT in .mypi/.
+    - The canonical run home is .mypi/task-implement-3/.
+    - Maintain the persistent resumable checklist exclusively at
+      .mypi/task-implement-3/run-details/plan.md.
+    - Only the runtime finalize tool writes run-details/final.md and
+      run-details/findings.md. Never hand-write or overwrite those files.
+    - Preserve conversation.jsonl and tool-calls.jsonl as run records.
+    - Do not create a second run-details directory at the repository root.
+
+    Source documents (all under docs/, NOT the repository root):
+    - docs/pi-nobash-product-spec-v1.7.3.md: authoritative scope, requirements, AC1-AC11.
+    - docs/pi-nobash-technical-spec-amendments.md: normative technical amendments
+      A1-A11; overrides the technical spec where they conflict.
+    - docs/pi-nobash-technical-implementation-spec-v2.3.md: pinned design and test plan.
+    - docs/bash-substitution-assessment-v3.2.1.md: supporting workload evidence.
+    Read all four before dispatch. If a source is missing, record BLOCKED in plan.md;
+    do not fabricate its contents or assert the corresponding criteria pass.
+    Authority: product spec > technical spec as amended by the amendments doc >
+    assessment. The target runtime is earendil-works/pi v1.1.0; check actual
+    runtime behavior with tests.
+
+    Current repository state (verified 2026-10-09; re-verify before dispatch):
+    - Git repository on branch main, pushed to origin. run-details/ is
+      gitignored, so final.md and plan.md stay local and are not pushed.
+    - The tooling baseline ALREADY EXISTS and passes: package.json,
+      tsconfig.json, .gitignore, tests/. Commands: `npm test` (node:test),
+      `npm run typecheck` (tsc --noEmit), `npm run lint` (biome check .),
+      `npm run fallow`. Use these names; do not invent new scripts.
+    - No build step: Pi loads the .ts extension via jiti. Relative imports use
+      explicit .ts specifiers; tsconfig sets erasableSyntaxOnly.
+    - package.json declares no runtime dependencies; host packages are
+      peerDependencies "*"; Biome/Fallow/TypeScript are devDependencies only.
+      A `files` allowlist (extensions, src, README.md) keeps dev tooling,
+      tests, specs, and .mypi out of an npm tarball; keep it correct when
+      adding runtime files.
+    - Runs 1 and 2 are COMPLETE and committed on main (pushed to origin): the
+      Pi v1.1.0 extension, bash blocker, /nobash-status, 7 tools, 91/91 tests,
+      README, and the A10 amendment. Do NOT re-implement or expand it.
+    - Run 3 does Part A (ecosystem alignment F1-F6) then Part B (README nits
+      N1-N5), both listed in plan.md "Resume here". Smallest change each; no
+      new capability or scope.
+    - run-details/ is gitignored, so plan.md/final.md stay local and are not in git.
+    - Do NOT overwrite the tooling baseline or revert package.json against the
+      frozen contracts.
+
+    Prior runs (baseline; do NOT repeat):
+    - Run 1 (task-implement-1) built the entire package and ended dod:false with
+      criteria 2, 5, 6, 8 open; pi_core crashed (0 tokens) and Phase 1 moved to
+      data_git; contracts C1-C9 and amendments A1-A10 were established.
+    - Run 2 (task-implement-2) closed all four open criteria (real pi CLI-process
+      test; A10/C9 session-start config read; model-driven paired measurement),
+      91/91 tests, reviewer APPROVE. All of it is committed on main.
+    - Full reports: run-1-final.md, run-1-findings.md, run-2-final.md, and
+      run-2-findings.md in this run's run-details/.
+    - Run 3 addresses only F1-F6 (ecosystem alignment) and N1-N5 (nits). Do not
+      re-implement or re-verify completed work.
+
+    Ponytail skill assessment (mandatory for every implementation decision):
+    - Before approving a design, implementation approach, refactor, or fix,
+      reconcile the proposed choice against the Ponytail skill assessment.
+    - Require each engineering peer to state the Ponytail assessment outcome
+      and any relevant trade-off in its recommendation or completion report.
+    - The reviewer must independently check that reconciliation and identify
+      any unsupported divergence before approving the change.
+    - Record decisions and their Ponytail reconciliation in plan.md, including
+      exceptions and the reason for each exception.
+    - Follow the actual available Ponytail skill instructions; do not invent
+      its contents. If the skill is unavailable, record the missing dependency
+      as BLOCKED and do not claim that reconciliation occurred.
+    - The product and technical specs still determine product requirements;
+      use Ponytail to assess implementation choices within those boundaries.
+
+    Test-driven development (mandatory for every implementation slice):
+    - Use RED -> GREEN -> REFACTOR. Before production code, add or update an
+      automated test/fixture for the next specified behavior, boundary, or bug.
+    - Run the targeted test and capture evidence that it fails for the expected
+      missing behavior (RED), not a syntax/setup/environment mistake.
+    - Make the smallest production change to pass it (GREEN), rerun the targeted
+      test, then refactor without changing behavior while all relevant tests pass.
+    - For cross-module or Pi-runtime behavior, write I1-I9 integration cases
+      first and exercise them against Pi v1.1.0 as soon as a runnable harness
+      exists. Keep unexecutable tests explicitly PENDING, never PASS.
+    - Each work-unit report must identify test file, initial RED result, GREEN
+      result, refactor checks, and any exceptions with reasons. Existing passing
+      tests alone do not demonstrate TDD.
+    - Do not weaken/delete a failing test to make the implementation appear done.
+      If a test-first step cannot run due to missing infrastructure, record
+      BLOCKED and the prerequisite in plan.md before implementation continues.
+
+    Fallow and Biome (mandatory quality checks):
+    - During setup, determine whether fallow and biome are installed and identify
+      the valid project-scoped invocations. Record baseline findings in plan.md.
+    - Use fallow health and fallow dead-code diagnostics where supported; use
+      biome check scoped to actual source/test paths, not unbounded generated
+      directories. Do not assume this fresh repository has a src/ tree yet.
+    - After each work unit, rerun appropriate scoped checks. At integration
+      milestones and final review rerun project-level Fallow/Biome checks.
+    - Fix newly introduced findings or record evidence-backed deferrals.
+      Never apply broad or unsafe auto-fixes without review and explicit scope.
+    - Record commands, outcomes, and outstanding findings in plan.md. Missing
+      tools or missing initial scripts must be recorded as BLOCKED, not passed.
+
+    Reliable source edits (all writing agents):
+    - Keep each `edit.oldText` at most 10 short lines; avoid large `newText`,
+      verbatim JSX blocks, repeated whitespace, and batching large replacements.
+    - For larger or line-anchored changes, use a short, bounded Bash/Python/Perl
+      edit rather than emitting huge `edit` arguments. Avoid unbounded regex
+      replacements and unnecessary whole-file rewrites.
+    - After the FIRST edit output-token/truncation error, do not retry that
+      call. Read or grep the target to establish its actual state, switch to a
+      deterministic scripted edit, then inspect the diff and run relevant tests.
+      A rejected tool call is not evidence that a file changed.
+
+    Persistent, resumable execution plan (mandatory, FIRST):
+    1. If plan.md exists, READ IT FIRST and reconcile checked items against
+       actual source files, commits, and test evidence. Never wipe prior progress.
+       If it does not exist, create it before dispatching work.
+    2. Use Markdown checkboxes (- [ ] and - [x]), grouped by Phase 1 through
+       Phase 4 and Phase 6 from the technical spec. Phase 5 Git mutations and
+       other optional operations are explicitly DEFERRED, not silently in scope.
+    3. For each work item keep: owner, affected files, dependencies, status,
+       RED/GREEN/REFACTOR evidence, Fallow/Biome findings, Ponytail
+       reconciliation, and concrete next step. Use separate BLOCKED
+       notes for missing inputs or unresolved test failures.
+    4. Include a 'Resume here' section at the top containing current phase,
+       last verified successful task, next ordered tasks, outstanding failures,
+       branch/commit if applicable, and commands needed to recheck the state.
+    5. Update plan.md BEFORE each substantial implementation work order, AFTER
+       each finished unit, after each failed test, and before finalization.
+       Do not mark a task done merely because a peer reported success.
+    6. If budget is getting tight, prioritize saving a truthful plan.md checkpoint
+       and reporting partial completion over starting another large task.
+    7. Do not intentionally exhaust the budget; reserve room for review,
+       evidence capture, and finalization. Check list_agents regularly.
+
+    Pre-dispatch contract freeze (mandatory before ANY implementation work order):
+    - plan.md ALREADY contains frozen contracts C1-C9, each with a definition,
+      owner, disposition, goal reconciliation, Ponytail note, and proving test.
+      ADOPT them: read plan.md first, verify each against the source docs, and
+      extend or correct them in place. Do NOT re-derive the same set from
+      scratch and do NOT overwrite or renumber them.
+    - If you find an under-specified decision not covered by C1-C9, freeze it as
+      a new contract (C7, C8, ...) in the same format. Do not skip this because
+      work looks obvious.
+    - Before dispatching the first work order for an area, ensure every shared
+      decision that area depends on is frozen in plan.md.
+    - Each frozen item MUST record: name, exact definition, owner peer, the
+      fixture/test that proves it, and exactly one disposition:
+      CONTRACT (normative, fully defined), TEST-GATED (behavior must be proven
+      against Pi v1.1.0 at runtime; do NOT write a guessed API as a
+      requirement), or FREE CHOICE (explicitly left to the implementer).
+    - Each frozen item MUST also reconcile with the project goal: state which
+      product goal (G1-G7) and acceptance criterion (AC1-AC11) it serves, and
+      confirm it adds no model-facing capability the product spec v1.7.3 does
+      not already call for. Uncalled-for functionality is rejected, not added.
+    - Each frozen item MUST state its Ponytail assessment (smallest complete
+      change that works, and what was deliberately skipped) and the test that
+      fails first (TDD RED) before it passes (GREEN).
+    - Do NOT freeze unverified Pi APIs (e.g. slash-command registration,
+      I1-I9 harness mechanics) as CONTRACT. Mark them TEST-GATED with the test
+      that will verify them.
+    - Do NOT dispatch implementation of an area whose shared contract is not
+      yet frozen. If a peer reports a missing contract mid-flight, freeze it
+      before that peer proceeds.
+    - Already frozen as C1-C9; confirm they still hold and extend if needed:
+      (1) build/test tooling: test runner, TS config/loading, and the exact
+          commands behind `npm test` and `npm run typecheck` (the spec's
+          package.json example defines no scripts);
+      (2) shared JSON/JSONL operator element shapes (Predicate, Selection,
+          Aggregate, OrderBy, groupBy output) and the initial operator set;
+      (3) the shared result/error envelope and return channel (how a tool
+          returns a code + capability + message, and how truncation is
+          signaled);
+      (4) Git tool output field lists and the revision-reference validation
+          rule;
+      (5) the named-validation runner adapter mechanism: interface, supported
+          runners, verified file-selection syntax, and reject-when-unverified
+          behavior.
+
+    Delivery workflow:
+    - Inspect the existing repository state and the four inputs first. Do not
+      overwrite already implemented work. Do not assume the repo is empty.
+    - Run 3 has two peers: pi_core is the sole implementation peer; reviewer
+      performs read-only attestation. Assign all work orders (WO-1..WO-12:
+      ecosystem alignment F1-F6, nits N1-N5, and the D2 tool-map diagram) to
+      pi_core in order; do not split them across peers, add peers, or invent
+      more work.
+    - Peers cannot message siblings directly in this harness. Relay any
+      necessary questions or integration details yourself.
+    - Prevent overlapping writes: establish exact file ownership in plan.md
+      before parallel dispatch. Shared files (package.json, common contracts,
+      shared helpers) must have a single designated owner at a time.
+    - Allow coding agents full development tools, including Bash. pi-nobash's
+      no-general-execution constraints are PRODUCT acceptance requirements,
+      not restrictions on these development sessions.
+    - Keep implementation within the mandatory v2.3 scope; especially no
+      generic execution fallback, new sandbox, adversarial security framework,
+      domain-specific add-ons, or optional Git mutations without approval.
+    - Integrate verified work incrementally; enforce the Ponytail, TDD,
+      analyzer, and edit procedures above for every accepted change.
+    - Runtime Pi v1.1.0 I1-I9 integration checks are required before declaring
+      the implementation done. Static source inspection alone is insufficient.
+    - For performance claims use comparable fixture measurements. Keep the
+      historical 411-vs-414 evidence discrepancy explicit, not 'fixed' by guess.
+    - Reject an empty FINAL_REPORT: if a peer reports no content, ask it to
+      restate the concrete result, tests, and evidence before accepting it.
+    - A stalled or partially implemented task remains unchecked, with reasons.
+
+    Run robustness (learned from runs 1-2; see docs/handoff-multi-agent-run-robustness.md):
+    - Verify each peer early. If a peer answers with empty text and zero usage
+      (cost 0 / tokens 0) on two consecutive prompts, treat it as unusable. Do
+      not keep pinging it.
+    - On an unusable peer: call stop on it, then re-dispatch its work order to a
+      live peer with the right permissions, and transfer that peer's file
+      ownership in plan.md before it writes anything. Do not leave the peer idle
+      and do not silently absorb its work into your own turn; if you must act to
+      keep the run alive, record it explicitly as supervisor-applied work in the
+      decision. If no live peer can take the work, record it as blocked.
+    - Allow longer awaits for long jobs. peer_prompt_timeout_ms is only the
+      default for send_prompt/await_response; pass an explicit larger timeoutMs
+      for the reviewer's final attestation (runs 1-2 saw 240s/300s correlation
+      timeouts and one 1800s await).
+    - Never accept an empty FINAL_REPORT as delivered work.
+
+    Finalization:
+    - Request an independent reviewer verdict for every DoD criterion, as an
+      EXACT fenced JSON array of {criterion,result,evidence} entries, one per
+      criterion. Any unproven criterion is fail, not an assumed pass.
+    - Call finalize with dod:true ONLY after implementation, required tests,
+      and the reviewer's evidence all pass. Otherwise use dod:false with a
+      concrete explanation of completed work and blockers.
+    - Before calling finalize, leave plan.md useful as a standalone starting
+      point for a fresh run, even if this run stops before completion.
+    - Do not claim the global $5 cap covers supervisor spend: the current
+      harness enforces only the peer allowance; keep supervisor usage modest.
+
+ask:
+  title: "pi-nobash run 3: ecosystem alignment (F1-F6) then nits (N1-N5)"
+  description: >
+    Run 3 of pi-nobash. The mandatory v2.3 scope is complete: runs 1 and 2
+    delivered the package (Pi v1.1.0 extension, unconditional bash blocker,
+    /nobash-status, typed json_query and streaming query_jsonl, read-only Git
+    tools, developer-named run_validation), 91/91 tests, and all eleven DoD
+    criteria attested; everything is committed on main. Run 3 does two things
+    and nothing else. Part A is an ecosystem-alignment review against Pi 1.1.0
+    built-ins and published pi-packages, producing six items F1-F6: F1 add a
+    promptSnippet to every registered tool (Pi built-ins and the closest
+    analogue @aslamplr/pi-safe-shell set it on every tool, and without it a
+    custom tool is omitted from the system prompt Available-tools section);
+    F2 declare every imported host package (tests import
+    @earendil-works/pi-ai with no declaration, relying on npm hoisting) and add
+    a guard test; F3 set annotations.readOnlyHint on the six read-only tools and
+    none on run_validation; F4 decide on the deliberate defaultActive:false
+    divergence (product goal G3) and document it; F5 decide on packaging
+    metadata (main, license, repository) using the ecosystem references in
+    plan.md; F6 decide whether to keep the explicit ./extensions/pi-nobash.ts
+    entry path. Part B fixes the five nits in the README Known issues section
+    (N1-N5): a test writing a tracked perf file, a live provider call in the
+    default suite, an unbounded session snapshot Map, an auth.json temp copy
+    after a crash, and the 50-vs-100 git path cap. Part C generates a static SVG
+    tool map with D2 (d2 v0.9.0 is installed): write
+    run-details/pi-nobash-tool-map.d2, validate it, and render
+    run-details/pi-nobash-tool-map.svg. No new folders and no package files
+    change. Follow product spec v1.7.3,
+    amendments A1-A11, and the frozen contracts C1-C9 in
+    .mypi/task-implement-3/run-details/plan.md. Verify each fix with a test,
+    keep the README and plan.md updated, and use TDD (RED/GREEN/REFACTOR) plus
+    scoped Fallow/Biome. No new model-facing capability and no scope expansion.
+  definition_of_done:
+    - "F1: every packaged tool (json_query, query_jsonl, git_status, git_diff, git_log, git_show, run_validation) sets a non-empty promptSnippet, asserted by a test."
+    - "F2: every host package imported by src/, extensions/, or tests/ is declared in peerDependencies or devDependencies, asserted by a test that scans bare imports; no reliance on hoisting."
+    - "F3: the six read-only tools declare annotations.readOnlyHint true and run_validation does not, asserted by a test."
+    - "F4: the defaultActive:false decision is recorded with rationale in plan.md and reflected in the README decisions table; F5 and F6 each have a recorded decision with evidence and the resulting manifest/entry-path state, or a documented reason to leave it unchanged."
+    - "N1: an ordinary npm test no longer modifies a tracked file; N2: the default npm test passes offline with no provider credentials; N3: the validation snapshot Map releases or bounds sessions, with a test; N4: the CLI test cannot leave an auth.json copy behind after a crash; N5: one source of truth for the git path cap per spec 9.6."
+    - "README Known issues and the decisions table reflect the completed work; .mypi/task-implement-3/run-details/plan.md records RED/GREEN evidence per work order, Ponytail reconciliation, analyzer results, and a truthful final state."
+    - "npm test, npm run typecheck, and npx biome check . are green at final review, with Fallow run and any deferred findings stated. No new model-facing capability or undeclared dependency was added."
+    - "C: run-details/pi-nobash-tool-map.d2 validates and renders to run-details/pi-nobash-tool-map.svg, and the SVG shows the blocked bash path, the retained native tools, the seven packaged tools and their defaultActive:false status, the CAPABILITY_GAP path, and the configuration surface; no new directory or package files change was introduced."
+
+agents:
+  - id: "pi_core"
+    title: "Cleanup, Ecosystem-Alignment, and Test-Infrastructure Engineer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.90
+    system_prompt: |
+      Run 3 implementer. The package is complete and committed; do NOT
+      re-implement or re-verify it. Do Part A then Part B, in order, each with
+      the smallest change that works and one test per change. Full evidence and
+      the decision inputs are in plan.md "Resume here".
+
+      Part A - ecosystem alignment:
+      - F1 (known): add a one-line promptSnippet to every tool. Pi's built-ins
+        all set it, @aslamplr/pi-safe-shell sets it on all of its tools, and
+        without it a custom tool is omitted from the system prompt's Available
+        tools section (dist/core/agent-session.js _toolPromptSnippets).
+      - F2 (known): declare @earendil-works/pi-ai in devDependencies (tests
+        import it today only via hoisting) and add a test that scans bare
+        imports in src/, extensions/, tests/ and asserts each is declared.
+      - F3 (known): add annotations.readOnlyHint:true to git_status, git_diff,
+        git_log, git_show; leave run_validation without it. Add a test.
+      - F4, F5, F6 (decisions): use the evidence in plan.md, decide, implement
+        only if warranted, and record the decision and reason. Prefer keeping
+        defaultActive:false (product goal G3) and documenting it in the README.
+
+      Part B - nits N1-N5 (see plan.md and the README Known issues section):
+      - N1 stop npm test rewriting the tracked paired-results.json.
+      - N2 make the default suite offline and credential-free.
+      - N3 release or bound the validation session snapshot Map.
+      - N4 make the CLI test crash-safe so it cannot leave an auth.json copy.
+      - N5 one source of truth for the git path cap per spec 9.6.
+
+      Part C - tool-map diagram (WO-12): generate the map in D2 (d2 v0.9.0 is
+      installed). Write .mypi/task-implement-3/run-details/pi-nobash-tool-map.d2,
+      run `d2 validate` on it, then render
+      .mypi/task-implement-3/run-details/pi-nobash-tool-map.svg. Keep both files
+      in run-details; do not create new directories and do not change the package
+      files allowlist. It must show the blocked bash path, the retained native
+      tools, the seven packaged tools as inactive-until-named, the CAPABILITY_GAP
+      path, and the configuration surface. Verify the rendered SVG contains the
+      expected labels.
+
+      Read the amendments doc (docs/pi-nobash-technical-spec-amendments.md, esp.
+      A10/A11) and the frozen contracts C1-C9 in
+      .mypi/task-implement-3/run-details/plan.md first; they override the
+      technical spec where they conflict. Add no new model-facing capability or
+      undeclared dependency. For each work order apply Ponytail assessment, TDD
+      (RED/GREEN/REFACTOR), scoped Fallow/Biome, and bounded edit calls; on a
+      token-limit edit error, inspect the file state, switch to a deterministic
+      scripted edit, and verify the diff. Update the README entry you fix.
+      Report exact paths, tests, observed output, and unverified claims to the
+      supervisor.
+
+  - id: "reviewer"
+    title: "Independent Specification and Acceptance Reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.60
+    system_prompt: |
+      You are the independent read-only reviewer for run 3: ecosystem alignment
+      F1-F6 and nits N1-N5. Inspect the source and test evidence against
+      product spec v1.7.3, the amendments doc
+      (docs/pi-nobash-technical-spec-amendments.md, esp. A11), technical spec
+      v2.3, and assessment v3.2.1 (in that authority order; the amendments
+      override the technical spec), and against the README Known issues list.
+      Flag incorrect Pi v1.1.0 assumptions, missing tests, generic-execution
+      escape hatches, unjustified scope, false claims, and conflicting changes.
+      No item may be marked done without executed evidence; require TDD
+      RED/GREEN per work order and baseline and final Fallow/Biome results.
+      Independently check each decision against the Ponytail skill assessment;
+      missing reconciliation is a review blocker. Bash permission is not
+      needed; do NOT treat the implementer's Bash usage as a product violation.
+      Reply APPROVE or CHANGES_REQUESTED with blocking issues and evidence. For
+      final attestation copy EVERY DoD criterion verbatim into a fenced JSON
+      array with exactly one {"criterion": "...", "result": "pass"|"fail",
+      "evidence": "..."} object per item. Mark unverified criteria fail. Report
+      to the supervisor only; never edit code or run files.
+
+validation:
+  # The current harness has an unarmed automatic change-detection gate.
+  # The supervisor and engineering peers MUST explicitly run and record these.
+  # These npm scripts already exist in package.json and pass; keep them green.
+  commands:
+    - "npm test"
+    - "npm run typecheck"
+    - "git diff --check"
