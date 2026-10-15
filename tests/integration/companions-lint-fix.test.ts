@@ -353,10 +353,10 @@ test("config binding: no config -> biome argv; javascript.linter eslint -> eslin
 	writeCompanionConfig(bad, jsLinterConfig("tslint"));
 	writeFileSync(path.join(bad, "a.ts"), "export let x = 1;\n");
 	const calls: unknown[] = [];
-	childProcess.spawn = ((...args: unknown[]) => {
-		calls.push(args);
+	childProcess.spawn = ((program: string, args: string[], opts: unknown) => {
+		calls.push([program, args, opts]);
 		// Not reached in this test: config parsing fails first.
-		return realSpawn(...(args as [string, string[], unknown]));
+		return realSpawn(program, args, opts as never);
 	}) as typeof childProcess.spawn;
 	try {
 		const out = await runTool(registerJsTools, bad, "js_lint_fix", {

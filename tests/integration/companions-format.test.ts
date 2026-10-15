@@ -91,11 +91,12 @@ function writeCompanionConfig(ws: string, formatter: string): void {
 	);
 }
 
-/** Binds a session for `ws`, runs the single registered tool, asserts success. */
+/** Binds a session for `ws`, runs the named format tool, asserts success. */
 async function runTool(
 	register: (pi: ExtensionAPI) => void,
 	ws: string,
 	params: { paths: string[] },
+	name: "js_format_write" | "py_format_write",
 ): Promise<{ formatted: string[]; truncated: boolean }> {
 	const { pi, fire, registered } = mockRegistrar();
 	register(pi);
@@ -105,9 +106,8 @@ async function runTool(
 		sessionManager: { getSessionId: () => sessionId },
 	};
 	fire("session_start", ctx);
-	assert.equal(registered.length, 1);
-	const tool = registered[0];
-	assert.ok(tool);
+	const tool = registered.find((t) => t.name === name);
+	assert.ok(tool, `${name} must be registered`);
 	const result = await tool.execute("id", params, undefined, undefined, ctx);
 	assert.notEqual(result.isError, true, result.content[0]?.text);
 	return result.details as { formatted: string[]; truncated: boolean };
@@ -153,7 +153,7 @@ test("py_format_write (REAL ruff from PATH): exact post bytes, others untouched"
 
 	// Reset the fixture and run the SAME input through the tool instead.
 	writeFileSync(path.join(ws, "a.py"), "x  =1\n");
-	const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] });
+	const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] }, "py_format_write");
 	assert.deepEqual(details, { formatted: ["a.py"], truncated: false });
 
 	// Tool output must be byte-identical to real-ruff output.
@@ -176,7 +176,7 @@ test("js_format_write (biome): exact post bytes, others untouched, idempotent", 
 	const untouched = "const keep = 1;\n";
 	writeFileSync(path.join(ws, "tidy.ts"), untouched);
 
-	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] });
+	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
 	assert.deepEqual(details, { formatted: ["messy.ts"], truncated: false });
 
 	// Exact post bytes (deterministic Biome output: tab indent).
@@ -185,7 +185,7 @@ test("js_format_write (biome): exact post bytes, others untouched, idempotent", 
 	assert.equal(readFileSync(path.join(ws, "tidy.ts"), "utf8"), untouched);
 
 	// Idempotency: formatting again yields identical bytes.
-	await runTool(registerJsTools, ws, { paths: ["messy.ts"] });
+	await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
 	assert.equal(readFileSync(path.join(ws, "messy.ts"), "utf8"), expected);
 });
 
@@ -201,7 +201,7 @@ test("js_format_write (prettier): exact post bytes, others untouched", {
 	const untouched = "const keep = 1;\n";
 	writeFileSync(path.join(ws, "tidy.ts"), untouched);
 
-	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] });
+	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
 	assert.deepEqual(details, { formatted: ["messy.ts"], truncated: false });
 
 	// Exact post bytes (deterministic Prettier output: 2-space indent).
@@ -239,7 +239,7 @@ test("py_format_write (STUB ruff, not real Ruff): exact argv and post bytes, oth
 		const untouched = "y = 2\n";
 		writeFileSync(path.join(ws, "b.py"), untouched);
 
-		const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] });
+		const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] }, "py_format_write");
 		assert.deepEqual(details, { formatted: ["a.py"], truncated: false });
 
 		// The stub was invoked with exactly the frozen argv.
