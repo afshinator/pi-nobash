@@ -1,10 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runTool } from "../../src/errors.ts";
 import { bindCompanionConfig } from "../config.ts";
+import { jsDepAdd, jsDepAddTool, jsDepRemove, jsDepRemoveTool } from "./dep.ts";
 import { jsFormatWrite, jsFormatWriteTool } from "./format-write.ts";
 import { jsLintFix, jsLintFixTool } from "./lint-fix.ts";
 
-/** Registers the JavaScript companion tools (format + safe lint fix). */
+/** Registers the JavaScript companion tools (format + safe lint fix + deps). */
 export function registerJsTools(pi: ExtensionAPI): void {
 	const getConfig = bindCompanionConfig(pi);
 	pi.registerTool({
@@ -27,6 +28,30 @@ export function registerJsTools(pi: ExtensionAPI): void {
 		execute: (_toolCallId, params, signal, _onUpdate, ctx) =>
 			runTool(async () =>
 				jsLintFix(params, signal, ctx.cwd, getConfig(ctx).javascript.linter),
+			),
+	});
+	pi.registerTool({
+		...jsDepAddTool,
+		execute: (_toolCallId, params, signal, _onUpdate, ctx) =>
+			runTool(async () =>
+				jsDepAdd(
+					params,
+					signal,
+					ctx.cwd,
+					getConfig(ctx).javascript.packageManager,
+				),
+			),
+	});
+	pi.registerTool({
+		...jsDepRemoveTool,
+		execute: (_toolCallId, params, signal, _onUpdate, ctx) =>
+			runTool(async () =>
+				jsDepRemove(
+					params,
+					signal,
+					ctx.cwd,
+					getConfig(ctx).javascript.packageManager,
+				),
 			),
 	});
 }
