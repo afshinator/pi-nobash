@@ -140,7 +140,7 @@ test("py_format_write (REAL ruff from PATH): exact post bytes, others untouched"
 		mkdtempSync(path.join(tmpdir(), "pi-nobash-fmt-it-")),
 	);
 	dirs.push(ws);
-	writeCompanionConfig(ws, "ruff");
+	writeCompanionConfig(ws, "prettier");
 	writeFileSync(path.join(ws, "a.py"), "x  =1\n");
 	const untouched = "y = 2\n";
 	writeFileSync(path.join(ws, "b.py"), untouched);

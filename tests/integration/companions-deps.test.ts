@@ -396,8 +396,8 @@ test("js_dep_add (REAL npm): registry probe, then real install of is-number with
 	assert.ok(existsSync(path.join(ws, "package-lock.json")), "lockfile exists");
 });
 
-test("expo_dep_add (REAL expo): skipped unless a LOCAL expo binary exists", {
-	timeout: 180_000,
+test("expo_dep_add (REAL expo): exact argv via the real CLI on an SDK project", {
+	timeout: 300_000,
 }, async (t) => {
 	// MUST NOT probe with `npx expo` — that would download expo from the
 	// registry just to run a skip check.
@@ -418,6 +418,21 @@ test("expo_dep_add (REAL expo): skipped unless a LOCAL expo binary exists", {
 		path.join(ws, "package.json"),
 		'{\n  "name": "real-expo-fixture",\n  "version": "1.0.0",\n  "private": true\n}\n',
 	);
+	// `expo install` reads the project's installed `expo` module to choose an
+	// SDK-compatible version, so bootstrap the SDK first (registry-gated;
+	// measured ~9 s / 331 MB). This is what makes the branch a REAL check
+	// rather than a stub: on a project without the SDK, expo itself exits 1.
+	try {
+		execFileSync(
+			"npm",
+			["install", "--ignore-scripts", "--no-audit", "--no-fund", "expo"],
+			{ cwd: ws, timeout: 180_000, stdio: "pipe" },
+		);
+	} catch {
+		return t.skip(
+			"could not install the expo SDK module (registry unreachable) — real-expo branch cannot run here",
+		);
+	}
 	const out = await runTool(registerExpoTools, ws, "expo_dep_add", {
 		packages: ["expo-constants"],
 	});
