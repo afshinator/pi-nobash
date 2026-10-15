@@ -23,6 +23,14 @@ export const PY_FORMATTERS = {
 	ruff: { program: "ruff", args: ["format", "--"] },
 } as const;
 
+export const JS_LINTERS: Record<JsLinter, FixedInvocation> = {
+	biome: { program: "npx", args: ["biome", "check", "--write", "--"] },
+	eslint: { program: "npx", args: ["eslint", "--fix", "--"] },
+};
+export const PY_LINTERS = {
+	ruff: { program: "ruff", args: ["check", "--fix", "--"] },
+} as const;
+
 export type CompanionConfig = {
 	javascript: {
 		formatter: JsFormatter;

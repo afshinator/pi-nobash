@@ -13,8 +13,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	bindCompanionConfig,
 	JS_FORMATTERS,
+	JS_LINTERS,
 	loadCompanionConfig,
 	PY_FORMATTERS,
+	PY_LINTERS,
 	type ToolCtx,
 } from "../../../companions/config.ts";
 
@@ -99,6 +101,21 @@ test("formatter: biome resolves through the fixed builder table", () => {
 	assert.deepEqual(PY_FORMATTERS.ruff, {
 		program: "ruff",
 		args: ["format", "--"],
+	});
+});
+
+test("linter tables resolve to the frozen lint-fix argv (A3 P1-1/P1-2)", () => {
+	assert.deepEqual(JS_LINTERS.biome, {
+		program: "npx",
+		args: ["biome", "check", "--write", "--"],
+	});
+	assert.deepEqual(JS_LINTERS.eslint, {
+		program: "npx",
+		args: ["eslint", "--fix", "--"],
+	});
+	assert.deepEqual(PY_LINTERS.ruff, {
+		program: "ruff",
+		args: ["check", "--fix", "--"],
 	});
 });
 
