@@ -570,3 +570,146 @@ test("config boundary: packageManager pnpm -> PARSE_ERROR envelope with zero spa
 		restoreSpawn();
 	}
 });
+
+// --- slice C: expo_dep_add (same grammar, frozen `npx expo install` argv) ---
+import { assertNpmPackageName } from "../../../companions/javascript/dep.ts";
+import { expoDepAdd, expoDepAddTool } from "../../../companions/expo/dep-add.ts";
+import { registerExpoTools } from "../../../companions/expo/index.ts";
+
+test("npm grammar is one exported function reused by expo (F5)", () => {
+	assert.equal(typeof assertNpmPackageName, "function");
+	assert.throws(() => assertNpmPackageName("pkg@1.2.3"), (e: unknown) => {
+		assert.equal((e as { code: string }).code, "INVALID_ARGUMENT");
+		return true;
+	});
+	assert.equal(assertNpmPackageName("lodash"), "lodash");
+});
+
+test("expo_dep_add: argv is exactly `npx expo install <names>` — no npm fallback, no --ignore-scripts", async () => {
+	const ws = workspace();
+	installSpawnInterceptor();
+	try {
+		calls.length = 0;
+		scripted = fakeChild(0);
+		const out = envelope(
+			await expoDepAdd(
+				{ packages: ["left-pad", "expo-router"] },
+				undefined,
+				ws,
+			),
+		);
+		assert.equal(out.isError, false, out.text);
+		assert.equal(calls.length, 1);
+		assert.equal(calls[0]?.program, "npx");
+		assert.deepEqual(calls[0]?.args, [
+			"expo",
+			"install",
+			"left-pad",
+			"expo-router",
+		]);
+		assert.equal(calls[0]?.args.includes("--ignore-scripts"), false);
+		assert.equal(calls[0]?.args.includes("--"), false);
+		assert.deepEqual(out.details, {
+			packages: ["left-pad", "expo-router"],
+		});
+	} finally {
+		restoreSpawn();
+	}
+});
+
+test("expo_dep_add: rejected name grammar -> INVALID_ARGUMENT with zero spawns", async () => {
+	const ws = workspace();
+	installSpawnInterceptor();
+	try {
+		for (const name of INVALID_NAMES) {
+			calls.length = 0;
+			const out = envelope(
+				await expoDepAdd({ packages: [name] }, undefined, ws),
+			);
+			assert.equal(out.isError, true, `expected rejection: ${name}`);
+			assert.equal(out.details.code, "INVALID_ARGUMENT", name);
+			assert.equal(calls.length, 0, `no spawn for rejected name: ${name}`);
+		}
+	} finally {
+		restoreSpawn();
+	}
+});
+
+test("expo_dep_add: 21 packages -> LIMIT_EXCEEDED with zero spawns", async () => {
+	const ws = workspace();
+	const packages = Array.from(
+		{ length: MAX_DEP_PACKAGES + 1 },
+		(_, i) => `pkg${i}`,
+	);
+	installSpawnInterceptor();
+	calls.length = 0;
+	try {
+		const out = envelope(await expoDepAdd({ packages }, undefined, ws));
+		assert.equal(out.isError, true);
+		assert.equal(out.details.code, "LIMIT_EXCEEDED");
+		assert.equal(calls.length, 0);
+	} finally {
+		restoreSpawn();
+	}
+});
+
+test("expo_dep_add: scripted exit 3 -> VALIDATION_FAILED; slow child -> TIMEOUT", async () => {
+	const ws = workspace();
+	installSpawnInterceptor();
+	try {
+		scripted = fakeChild(3, "", "expo error");
+		const fail = envelope(await expoDepAdd({ packages: ["a"] }, undefined, ws));
+		assert.equal(fail.isError, true);
+		assert.equal(fail.details.code, "VALIDATION_FAILED");
+		scripted = slowChild();
+		const slow = envelope(
+			await expoDepAdd({ packages: ["a"] }, undefined, ws, 10),
+		);
+		assert.equal(slow.isError, true);
+		assert.equal(slow.details.code, "TIMEOUT");
+	} finally {
+		restoreSpawn();
+	}
+});
+
+test("expo_dep_add tool def: direct, defaultActive false, destructive, one-line snippet", () => {
+	assert.equal(expoDepAddTool.exposure, "direct");
+	assert.equal(expoDepAddTool.defaultActive, false);
+	assert.equal(expoDepAddTool.annotations?.readOnlyHint, false);
+	assert.equal(expoDepAddTool.annotations?.destructiveHint, true);
+	assert.ok(
+		typeof expoDepAddTool.promptSnippet === "string" &&
+			!expoDepAddTool.promptSnippet.includes("\n"),
+	);
+});
+
+test("expo registration: exactly expo_dep_add, config-bound envelope", async () => {
+	const ws = workspace();
+	writeCompanionConfig(ws, "npm");
+	const { pi, registered, fire } = mockRegistrar();
+	registerExpoTools(pi);
+	assert.deepEqual(
+		registered.map((t) => t.name),
+		["expo_dep_add"],
+	);
+	installSpawnInterceptor();
+	try {
+		calls.length = 0;
+		scripted = fakeChild(0);
+		const ctx = {
+			cwd: ws,
+			sessionManager: { getSessionId: () => "expo-test" },
+		};
+		fire("session_start", ctx);
+		const tool = registered.find((t) => t.name === "expo_dep_add");
+		assert.ok(tool);
+		const out = envelope(
+			await tool.execute("id", { packages: ["expo-router"] }, undefined, undefined, ctx),
+		);
+		assert.equal(out.isError, false, out.text);
+		assert.equal(calls[0]?.program, "npx");
+		assert.deepEqual(calls[0]?.args, ["expo", "install", "expo-router"]);
+	} finally {
+		restoreSpawn();
+	}
+});
