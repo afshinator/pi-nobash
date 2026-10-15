@@ -153,7 +153,12 @@ test("py_format_write (REAL ruff from PATH): exact post bytes, others untouched"
 
 	// Reset the fixture and run the SAME input through the tool instead.
 	writeFileSync(path.join(ws, "a.py"), "x  =1\n");
-	const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] }, "py_format_write");
+	const details = await runTool(
+		registerPythonTools,
+		ws,
+		{ paths: ["a.py"] },
+		"py_format_write",
+	);
 	assert.deepEqual(details, { formatted: ["a.py"], truncated: false });
 
 	// Tool output must be byte-identical to real-ruff output.
@@ -176,7 +181,12 @@ test("js_format_write (biome): exact post bytes, others untouched, idempotent", 
 	const untouched = "const keep = 1;\n";
 	writeFileSync(path.join(ws, "tidy.ts"), untouched);
 
-	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
+	const details = await runTool(
+		registerJsTools,
+		ws,
+		{ paths: ["messy.ts"] },
+		"js_format_write",
+	);
 	assert.deepEqual(details, { formatted: ["messy.ts"], truncated: false });
 
 	// Exact post bytes (deterministic Biome output: tab indent).
@@ -185,7 +195,12 @@ test("js_format_write (biome): exact post bytes, others untouched, idempotent", 
 	assert.equal(readFileSync(path.join(ws, "tidy.ts"), "utf8"), untouched);
 
 	// Idempotency: formatting again yields identical bytes.
-	await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
+	await runTool(
+		registerJsTools,
+		ws,
+		{ paths: ["messy.ts"] },
+		"js_format_write",
+	);
 	assert.equal(readFileSync(path.join(ws, "messy.ts"), "utf8"), expected);
 });
 
@@ -201,7 +216,12 @@ test("js_format_write (prettier): exact post bytes, others untouched", {
 	const untouched = "const keep = 1;\n";
 	writeFileSync(path.join(ws, "tidy.ts"), untouched);
 
-	const details = await runTool(registerJsTools, ws, { paths: ["messy.ts"] }, "js_format_write");
+	const details = await runTool(
+		registerJsTools,
+		ws,
+		{ paths: ["messy.ts"] },
+		"js_format_write",
+	);
 	assert.deepEqual(details, { formatted: ["messy.ts"], truncated: false });
 
 	// Exact post bytes (deterministic Prettier output: 2-space indent).
@@ -239,7 +259,12 @@ test("py_format_write (STUB ruff, not real Ruff): exact argv and post bytes, oth
 		const untouched = "y = 2\n";
 		writeFileSync(path.join(ws, "b.py"), untouched);
 
-		const details = await runTool(registerPythonTools, ws, { paths: ["a.py"] }, "py_format_write");
+		const details = await runTool(
+			registerPythonTools,
+			ws,
+			{ paths: ["a.py"] },
+			"py_format_write",
+		);
 		assert.deepEqual(details, { formatted: ["a.py"], truncated: false });
 
 		// The stub was invoked with exactly the frozen argv.
