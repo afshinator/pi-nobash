@@ -1,8 +1,8 @@
-# Roadmap
+# TODO
 
-The single tracker for pi-nobash. **Checked items keep their date and commit and are never
-removed** — that is the history of what was done. Unchecked items are the queue, ordered by
-priority. Detail always lives in the linked document, not here.
+History and scope for pi-nobash. **Checked items keep their date and commit and are never
+removed** — that is the history of what was done. The live queue is GitHub Issues
+(`gh issue list --state open`), configured by `docs/agents/issue-tracker.md`.
 
 - Product requirements: [product spec v1.7.3](./pi-nobash-product-spec-v1.7.3.md)
 - Technical deltas: [amendments](./pi-nobash-technical-spec-amendments.md) (authoritative over the technical spec)
@@ -67,57 +67,22 @@ version specifiers or URL/VCS forms; no model-supplied flags anywhere.
 - [x] `py_dep_add`, `py_dep_remove` (uv only; Poetry/pipenv/pip are `CAPABILITY_GAP`)
       — 2026-10-14, `2585131`
 
-## P2 — deferred
+## Live queue (GitHub Issues)
 
-- [ ] `fs_copy`, `fs_move` (workspace-scoped, on demonstrated need)
-- [ ] `git_rm_cached` (index-only)
-- [ ] `fs_delete`, `rust_clippy_fix` (deferred; no recursive delete, no implicit unsafe fixer)
+Work is tracked as GitHub issues; `gh issue list --state open` is the queue. The tracker and
+triage conventions live in `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md`.
+The nine open items below were migrated from this document on 2026-10-15; each issue keeps its
+original context.
 
-## Later / evaluation
+- [#1](https://github.com/afshinator/pi-nobash/issues/1) — P2: `fs_copy`, `fs_move` (workspace-scoped)
+- [#2](https://github.com/afshinator/pi-nobash/issues/2) — P2: `git_rm_cached` (index-only)
+- [#3](https://github.com/afshinator/pi-nobash/issues/3) — P2: `fs_delete`, `rust_clippy_fix` (deferred)
+- [#4](https://github.com/afshinator/pi-nobash/issues/4) — Evaluate `mcp-server-go-quality` as a Go diagnostics companion
+- [#5](https://github.com/afshinator/pi-nobash/issues/5) — Rust and Go mutation tools
+- [#6](https://github.com/afshinator/pi-nobash/issues/6) — Evaluate codemode as a tool or excluded execution path
+- [#7](https://github.com/afshinator/pi-nobash/issues/7) — Resolve the 32 fallow refactor targets
+- [#8](https://github.com/afshinator/pi-nobash/issues/8) — The integration suite runs real backends; the Expo branch is expensive
+- [#9](https://github.com/afshinator/pi-nobash/issues/9) — Reconcile the 411-vs-414 call-count discrepancy
 
-- [ ] **Go diagnostics reuse (deferred from task-plan-4).** Decide adopt/adapt/defer for
-      [`mcp-server-go-quality`](https://github.com/afshinator/mcp-server-go-quality) as a Go
-      diagnostics companion. Deferred because it needs read-only source/network review of an
-      external repo; `task-plan-4` records the question, this checklist, and the reason
-      instead of an evaluation. Resolve when picked up:
-  - [ ] automatic `install_tools` must never be exposed as a read-only check or run silently
-  - [ ] its `extra_args` must not become model-supplied argv (review config ownership and session-load behavior)
-  - [ ] the model may choose only enumerated diagnostics and bounded scope
-  - [ ] verify side effects: caches, tool/binary downloads, network access, project-controlled code
-  - [ ] confirm Pi integration (MCP is not a Pi extension; adapter or Pi-native rewrite)
-  - [ ] constrain workspace roots, output cardinality, `native` payload size, cancellation
-  - [ ] review license, pinning/reproducibility, and adapt-vs-depend
-- [ ] Rust and Go mutation tools (`rust_format_write`, `go_format_write`, `go_mod_tidy`, dependency tools)
-- [ ] **Codemode: tool or excluded execution path? (evaluation).** Research
-      ["What is Codemode" (Armin Ronacher, 2026-10-06)](https://lucumr.pocoo.org/2026/10/6/codemode/)
-      and decide whether pi-nobash should support codemode as a tool/stack. Pi 1.0 exposes
-      codemode as LLM-issued JavaScript tool calls composed on the harness side in a
-      QuickJS/WASM sandbox (no network, no filesystem, no timers; enabled with
-      `defaultTools: ["+codemode"]` or MCP). Today pi-nobash treats codemode only as general
-      execution: it is in `KNOWN_GENERAL_EXECUTION_TOOLS` (`src/constants.ts`) and every stack
-      guide passes `--exclude-tools bash,powershell,codemode`. Resolve:
-  - [ ] accepted: codemode reopens a generic execution route in principle (a script composes tool calls); the open question is how much the harness API narrows it. Determine from the installed Pi runtime and its source/docs — not the article — whether a codemode script sees only the active tools' typed schemas, or a generic escape (arbitrary tool names/argv, `bash`, authoring new tools at runtime)
-  - [ ] if the surface is typed, does that typing actually shrink the hallucinated-chaos surface versus raw bash, or is it cosmetic (any active tool callable with model-authored arguments)?
-  - [ ] can codemode reach `bash` or any non-frozen program once bash is excluded, or only the tools left active?
-  - [ ] if supported, which tools may a codemode script see, and does model-authored codemode count as model-authored argv/config (PD6) or as bounded composition?
-  - [ ] verify Pi 1.1.0 codemode semantics and its interaction with `--exclude-tools`/`defaultActive` against the installed runtime, not the article
-  - [ ] record an adopt/adapt/defer decision with the smallest complete change, or why codemode stays excluded
-
-## Known debt
-
-- [ ] **Integration suite runs real backends; the Expo branch is expensive (2026-10-14).**
-      The companion integration tests run the REAL binary when it is on `PATH` and skip with a
-      printed reason otherwise: `npm`, `expo`, `uv`, `ruff`, `eslint`, `biome`. Verify with
-      `npm test` (the skip list names the missing binary).
-      `tests/integration/companions-deps.test.ts` — `expo_dep_add (REAL expo)` (line 399) —
-      bootstraps the SDK into a throwaway project with `npm install expo@<major>`, where the
-      major comes from `expo --version`; `expo@latest` was broken on 2026-10-14 (ETARGET
-      `@expo/cli@^58.1.9`), so the fixture pins the CLI's major. It runs on every run where
-      `expo` is on `PATH`; measured ~331 MB in `node_modules` (~5-26 s here). If CI cost
-      matters, gate that branch behind an opt-in env var, mirroring `PI_NOBASH_LIVE_PROVIDER`
-      (that provider-credential test is the only permanent skip; the rest are binary-gated).
-      Local tooling used to exercise them: `uv` (Homebrew), `uv tool install ruff`,
-      `npm install -g eslint expo`.
-- [ ] `npm run fallow` reports 32 refactor targets (no correctness defects) — deferred
-- [ ] Assessment 411-vs-414 call-count discrepancy is unreconciled (needs the original transcripts)
-- [ ] Optional mutations beyond those listed above remain unplanned by design
+Standing scope note, not a ticket: optional mutations beyond those listed remain unplanned by
+design.
