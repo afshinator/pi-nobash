@@ -14,9 +14,11 @@ import {
 	bindCompanionConfig,
 	JS_FORMATTERS,
 	JS_LINTERS,
+	JS_PACKAGE_MANAGERS,
 	loadCompanionConfig,
 	PY_FORMATTERS,
 	PY_LINTERS,
+	PY_PACKAGE_MANAGERS,
 	type ToolCtx,
 } from "../../../companions/config.ts";
 
@@ -101,6 +103,22 @@ test("formatter: biome resolves through the fixed builder table", () => {
 	assert.deepEqual(PY_FORMATTERS.ruff, {
 		program: "ruff",
 		args: ["format", "--"],
+	});
+});
+
+test("dependency builder tables are frozen verbatim (F1)", () => {
+	assert.deepEqual(JS_PACKAGE_MANAGERS.npm, {
+		add: { program: "npm", args: ["install", "--ignore-scripts"] },
+		addDev: {
+			program: "npm",
+			args: ["install", "--ignore-scripts", "--save-dev"],
+		},
+		remove: { program: "npm", args: ["uninstall", "--ignore-scripts"] },
+	});
+	assert.deepEqual(PY_PACKAGE_MANAGERS.uv, {
+		add: { program: "uv", args: ["add"] },
+		addDev: { program: "uv", args: ["add", "--dev"] },
+		remove: { program: "uv", args: ["remove"] },
 	});
 });
 

@@ -23,6 +23,35 @@ export const PY_FORMATTERS = {
 	ruff: { program: "ruff", args: ["format", "--"] },
 } as const;
 
+/**
+ * FD6 dependency-tool builders: fixed argv per (manager, operation); the tool
+ * appends only grammar-validated bare package names. `--ignore-scripts` is
+ * frozen (P1-3): npm install lifecycle scripts are arbitrary execution, so
+ * the flag is unconditional — the model can never remove it.
+ */
+export type DepCommands = {
+	add: FixedInvocation;
+	addDev?: FixedInvocation;
+	remove: FixedInvocation;
+};
+export const JS_PACKAGE_MANAGERS: Record<string, DepCommands> = {
+	npm: {
+		add: { program: "npm", args: ["install", "--ignore-scripts"] },
+		addDev: {
+			program: "npm",
+			args: ["install", "--ignore-scripts", "--save-dev"],
+		},
+		remove: { program: "npm", args: ["uninstall", "--ignore-scripts"] },
+	},
+};
+export const PY_PACKAGE_MANAGERS: Record<string, DepCommands> = {
+	uv: {
+		add: { program: "uv", args: ["add"] },
+		addDev: { program: "uv", args: ["add", "--dev"] },
+		remove: { program: "uv", args: ["remove"] },
+	},
+};
+
 export const JS_LINTERS: Record<JsLinter, FixedInvocation> = {
 	biome: { program: "npx", args: ["biome", "check", "--write", "--"] },
 	eslint: { program: "npx", args: ["eslint", "--fix", "--"] },
