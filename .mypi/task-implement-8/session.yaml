@@ -1,0 +1,348 @@
+# Save as pi-nobash/.mypi/task-implement-8/session.yaml.
+# Launch AFTER task-implement-7 has landed (main should contain P1a).
+# `mypi-run`, then `/mypi-multi-agent task-implement-8`.
+#
+# Purpose: P1b — the dependency-mutation companions: js_dep_add,
+# js_dep_remove, expo_dep_add, py_dep_add, py_dep_remove. This is the
+# higher-risk half of P1: it rewrites manifests and lockfiles, touches the
+# network, and must block (or document) install lifecycle scripts.
+#
+# Authored to docs/agent-config-guide.md (version "1.2"): session.attester is
+# required, verdicts are checked verbatim against the DoD, and DoD items are work
+# criteria only (the Ponytail and biome items are the artifact carve-out).
+#
+# Verified before writing (re-verify against the files; do not assume):
+#   - companions/config.ts ALREADY parses javascript.packageManager (enum: npm)
+#     and python.packageManager (enum: uv). P1b adds enum->argv BUILDERS and the
+#     tools; it must NOT change the schema.
+#   - companions/javascript/index.ts and companions/python/index.ts register the
+#     formatter (and P1a linters); companions/expo/ does not exist yet.
+#   - tests/helpers/companion-harness.ts exposes recordSpawns and REPO_ROOT.
+#
+# Test strategy (operator decision, O2+O3): a labelled `npm`/`npx`/`uv` STUB on
+# PATH records argv and writes a known manifest+lockfile diff, so the exact argv
+# and exact post-diff are asserted offline and deterministically; a real-binary
+# branch runs only when the binary (and, for installs, the registry) is
+# available and otherwise skips with a printed reason. A stub never counts as a
+# real-binary pass.
+#
+# Frozen error boundary (resolves the A6 ambiguity): a name-form violation
+# (version specifier, URL, git/VCS specifier, alias, extras, uppercase, empty)
+# is INVALID_ARGUMENT before any spawn; an unsupported package manager
+# (pnpm/yarn/bun/Poetry/pipenv/pip) or an inexpressible operation is
+# CAPABILITY_GAP. The model never supplies a version or a flag.
+#
+# Budget: session.max_cost_usd 2.50 = dep_js 1.10 + dep_py 0.70 + reviewer 0.70.
+version: "1.2"
+
+session:
+  id: "task-implement-8"
+  supervisor_model: "deepseek/deepseek-flash"
+  attester: "reviewer"
+  max_cost_usd: 2.50
+  agent_stop_threshold_percent: 100
+  stop_at_work_order_boundary: true
+  verify_models: "strict"
+  heartbeat_timeout_ms: 5000
+  peer_prompt_timeout_ms: 600000
+  peer_retry_pause_ms: 10000
+  peer_max_retries: 2
+  # One exact command the read-only reviewer may run (exact-match allowlist).
+  shell_vocabulary:
+    - "npx biome check ."
+  supervisor_system_prompt: |
+    You are the implementation supervisor for pi-nobash P1b (dependency
+    mutations). Keep your own model usage modest, verify every claim, and
+    reserve budget for the attestation.
+
+    Workspace and artifacts:
+    - Run from the pi-nobash repository root. Canonical run home:
+      .mypi/task-implement-8/.
+    - FIRST create and check out a branch `feat/p1-deps` from main and commit
+      every slice there; do not commit to main. The branch is the deliverable
+      the operator reviews and merges.
+    - Maintain .mypi/task-implement-8/run-details/plan.md. Only the finalize
+      tool writes final.md and findings.md.
+
+    WRITE SCOPE (hard):
+    - Allowed: companions/config.ts (add ONLY the package-manager builder
+      entries), companions/javascript/dep.ts, companions/javascript/index.ts,
+      companions/expo/index.ts (new), companions/expo/dep-add.ts,
+      companions/python/dep.ts, companions/python/index.ts, tests/**, and
+      .mypi/task-implement-8/** run state.
+    - Do NOT change companions/process.ts, companions/git/**, the formatter or
+      lint-fix tools, src/, or extensions/. Do NOT change the FD5 config schema
+      (packageManager is already parsed).
+
+    Pre-dispatch contract freeze (BEFORE any work order; VERIFY against files):
+    - Read companions/config.ts, the P0 git tools (companions/git/*.ts) for the
+      validation/envelope conventions, the formatter and (if present) lint-fix
+      tools, and the P0 tests. Confirm the packageManager enums are already
+      parsed.
+    - Freeze in plan.md, with a proving test each: every tool schema, the exact
+      argv per tool and per manager, the `details` shape, the error-code
+      mapping (name-form -> INVALID_ARGUMENT; unsupported manager/inexpressible
+      -> CAPABILITY_GAP), the name grammars (npm and PEP 508), and the test
+      strategy above. Correct any frozen claim that does not match the code.
+
+    Implementation contract (docs/plans/pi-nobash-companions-implementation-plan.md A3, P1-3..P1-6):
+    - js_dep_add — companions/javascript/dep.ts, schema `{ packages: string[] }`
+      (1..20) plus `dev?: boolean`. npm name grammar: `@scope/name` or bare,
+      lowercase, `[a-z0-9._-]`, length <= 214, no leading `.`/`-`, and NO
+      version specifier, range, URL, git specifier, or alias. argv exactly
+      `npm install [--save-dev] --ignore-scripts <names...>` (one frozen
+      builder; `--ignore-scripts` is always present and cannot be removed).
+      details `{ packages: string[]; dev: boolean; manifestUpdated: true }`.
+    - js_dep_remove — same schema without `dev`; argv exactly
+      `npm uninstall --ignore-scripts <names...>`.
+    - expo_dep_add — companions/expo/dep-add.ts, `{ packages: string[] }` 1..20,
+      same name grammar; argv exactly `npx expo install <names...>`; never a
+      plain npm fallback (SDK-matched versions).
+    - py_dep_add / py_dep_remove — companions/python/dep.ts, `{ packages }`
+      1..20 (+ `dev?` on add); PEP 508 name grammar `[A-Za-z0-9._-]+` with NO
+      extras, specifiers, URLs, or VCS links; argv `uv add [--dev] <names...>`
+      and `uv remove <names...>`.
+    - Add `JS_PACKAGE_MANAGERS` and `PY_PACKAGE_MANAGERS` FixedInvocation tables
+      in companions/config.ts next to the existing builder tables. dep_js writes
+      the config.ts entry FIRST (dep_py imports PY_PACKAGE_MANAGERS) — sequence
+      the work orders so dep_py does not start its module before that export
+      exists.
+    - Register the tools in the existing index.ts files with the same
+      bindCompanionConfig + runTool pattern as the formatters. Every tool:
+      exposure "direct", defaultActive false, a one-line promptSnippet,
+      readOnlyHint false, accurate destructive hint.
+
+    Lifecycle/side-effect analysis to reconcile in plan.md (from A3):
+    - js_dep_add: network (registry); npm lifecycle scripts BLOCKED by
+      --ignore-scripts; rewrites package.json + package-lock.json.
+    - js_dep_remove: no install scripts; rewrites package.json + lockfile.
+    - expo_dep_add: network + SDK resolution; may run package scripts on the
+      Expo-blessed path (documented); rewrites package.json + lockfile.
+    - py_dep_add: PyPI network; build backend only, no install lifecycle
+      scripts; rewrites pyproject.toml + uv.lock and updates .venv.
+    - py_dep_remove: no network; rewrites pyproject.toml + uv.lock.
+    Confirm the code matches this matrix or record the divergence.
+
+    Test-first development (mandatory, TDD):
+    - RED -> GREEN -> refactor for every slice. Assert exact argv, exact
+      manifest/lockfile diff, exact error codes, and spawn counts; never only
+      "the file changed".
+    - Offline proof: a labelled stub npm/npx/uv on PATH writes a known
+      manifest+lockfile diff so the exact post-state is asserted without a
+      registry; a real-binary branch skips with a printed reason when the binary
+      (or registry) is unavailable. A stub never counts as a real-binary pass.
+    - The name-grammar suites (npm and PEP 508) must cover: version specifier,
+      range, URL, git specifier, alias, extras, uppercase, empty, and the
+      21-package LIMIT_EXCEEDED case.
+    - Assert `--ignore-scripts` is present in every npm install/uninstall argv
+      and absent nowhere it should be.
+
+    Ponytail reconciliation (mandatory for EVERY implementation, refactor, test,
+    or config change):
+    - Record in plan.md, per change: the change, the smallest complete design
+      that works, what was deliberately skipped, and any new abstraction or
+      dependency (must be none). Reuse src/path-policy.ts, src/errors.ts,
+      src/constants.ts, companions/process.ts, companions/config.ts, and the
+      existing helpers and stub pattern. A change with no recorded reconciliation
+      is not done; the reviewer verifies each is non-vacuous.
+
+    Verify all findings and proposals:
+    - Do not accept a peer's claim of success. Verify each finding against the
+      file or by running the command and record the evidence (path, or command +
+      observed output) in plan.md. Reproduce this prompt's "Verified before
+      writing" claims yourself before dispatch; correct plan.md if one is wrong.
+
+    Quality checks (biome at the right time and place):
+    - Each peer runs `npx biome check .` on its own slice after finishing it and
+      fixes what it introduced.
+    - The supervisor reruns the full gate at each slice and at the end:
+      `npm run typecheck`, `npm test`, `npx biome check .`, recording exact
+      counts. Never round or restate from memory.
+    - Before the attestation the reviewer runs exactly `npx biome check .` on the
+      final tree (its only allowed command) and reports the exact output; the
+      supervisor records it in plan.md. Any issue is fixed by the owning peer and
+      biome rerun clean, or recorded as an explicit open finding.
+
+    Persistent, resumable execution plan (mandatory FIRST):
+    - If plan.md exists, READ IT FIRST and reconcile against files; never wipe
+      progress. Otherwise create it before dispatching.
+    - Checkboxes grouped by slice (config builders, js_dep_add/remove,
+      expo_dep_add, py_dep_add/remove, tests), each with owner, target files,
+      status, RED/GREEN evidence, Ponytail note, and a 'Resume here' section.
+    - Update plan.md BEFORE each work order and AFTER each finished unit. Do not
+      mark an item done because a peer reported success.
+
+    Run robustness:
+    - Two empty, zero-usage replies means unusable: stop the peer and reassign
+      its files. Never accept an empty FINAL_REPORT. Pass a larger explicit
+      timeoutMs for the reviewer's attestation.
+    - Roster fixed: dep_js (glm-5p3-flash), dep_py (deepseek/deepseek-flash),
+      reviewer (gpt-6-luna). Do not use deepseek/deepseek-v4-pro or
+      anthropic/claude-sonnet-5-5.
+
+    Finalization:
+    - Send the reviewer the DoD verbatim, in order; it must reply with a fenced
+      JSON array of {criterion, result, evidence}, one entry per criterion, each
+      criterion copied verbatim. A missing, rephrased, or failed criterion fails
+      the run.
+    - Call finalize with dod:true only when the branch holds the tools, tests,
+      and gates and the reviewer's evidence passes; otherwise dod:false with a
+      concrete reason.
+
+ask:
+  title: "P1b: dependency tools (js_dep_add/remove, expo_dep_add, py_dep_add/remove)"
+  description: >
+    Add the dependency-mutation companions on top of P0/P1a. Implement
+    js_dep_add and js_dep_remove (companions/javascript/dep.ts),
+    expo_dep_add (companions/expo/dep-add.ts), and py_dep_add/py_dep_remove
+    (companions/python/dep.ts) with the same typed-input, fixed-argv,
+    bounded-output discipline: strict npm (or PEP 508) package-name grammar with
+    no version specifier, range, URL, git specifier, alias, or extras; argv from
+    the existing FD5 packageManager config (npm for JS, uv for Python) with the
+    matching builders added to companions/config.ts; npm install/uninstall
+    always carry --ignore-scripts, and expo uses npx expo install (never plain
+    npm). Register the tools in the existing index.ts files (and a new
+    companions/expo/index.ts) using the bindCompanionConfig + runTool pattern.
+    Prove argv and manifest/lockfile diffs offline with a labelled stub on PATH,
+    plus a real-binary branch that skips with a printed reason when the binary
+    or registry is unavailable. Write failing tests first. Do not change the FD5
+    config schema, companions/process.ts, companions/git/**, the formatter or
+    lint-fix tools, src/, or extensions/. Keep npm run typecheck, npm test, and
+    npx biome check . green, and record a Ponytail reconciliation plus the
+    lifecycle/side-effect reconciliation in run-details/plan.md.
+  definition_of_done:
+    - "js_dep_add is implemented and registered with schema { packages: string[] } (1..20) plus dev?: boolean; it rejects a version specifier, range, URL, git specifier, alias, uppercase, or empty name with INVALID_ARGUMENT before any spawn, and spawns exactly the frozen npm argv containing --ignore-scripts (and --save-dev when dev is true)."
+    - "js_dep_remove is implemented and registered with { packages: string[] } (1..20) and spawns exactly npm uninstall --ignore-scripts <names>."
+    - "expo_dep_add is implemented and registered with { packages: string[] } (1..20) and spawns exactly npx expo install <names>, with no plain-npm fallback and no --ignore-scripts."
+    - "py_dep_add and py_dep_remove are implemented and registered with { packages: string[] } (1..20, dev? on add); a PEP 508 name violation (specifier, extras, URL, or VCS) is INVALID_ARGUMENT before any spawn, and the argv is exactly uv add [--dev] <names> / uv remove <names>."
+    - "Offline, a labelled npm/npx/uv stub on PATH records argv and writes a known manifest-plus-lockfile diff; the tests assert the exact argv and the exact post-diff, and a real-binary branch skips with a printed reason when the binary or registry is unavailable."
+    - "The backend comes from developer config only: companions.javascript.packageManager and companions.python.packageManager select the argv; an unsupported manager (pnpm/yarn/bun/Poetry/pipenv/pip) returns CAPABILITY_GAP; no tool schema exposes a backend, version, or flag field."
+    - "The error-code boundary is frozen and tested: a name-form violation returns INVALID_ARGUMENT, and an unsupported manager or inexpressible operation returns CAPABILITY_GAP, each with zero spawns where no spawn is intended."
+    - "Every new tool registers exposure \"direct\", defaultActive false, a one-line promptSnippet, and readOnlyHint false; src/ and extensions/ are unchanged; and npm run typecheck, npm test, and npx biome check . all exit 0."
+    - "run-details/plan.md records a non-vacuous Ponytail reconciliation for every change, the per-tool lifecycle/side-effect reconciliation (network, install scripts, lockfile, manifest) that matches A3 or names each divergence, and the reviewer's exact npx biome check . result on the final tree."
+
+agents:
+  - id: "dep_js"
+    title: "JS and Expo dependency-tool implementer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.10
+    system_prompt: |
+      Implementation run P1b. You own: the package-manager builder entries in
+      companions/config.ts (write these FIRST), companions/javascript/dep.ts
+      (js_dep_add, js_dep_remove), companions/expo/index.ts (new),
+      companions/expo/dep-add.ts, the companions/javascript/index.ts
+      registration, and their tests. Do NOT change the FD5 config schema
+      (packageManager is already parsed), companions/process.ts,
+      companions/git/**, the formatter or lint-fix tools, src/, or extensions/.
+
+      Read docs/plans/pi-nobash-companions-implementation-plan.md (A3, P1-3..P1-5),
+      companions/config.ts, companions/git/add.ts (validation + envelope
+      conventions), and tests/unit/companions/formatters.test.ts +
+      tests/integration/companions-format.test.ts (the stub pattern) first. Then,
+      test-first (RED -> GREEN -> refactor):
+      - config.ts: add JS_PACKAGE_MANAGERS (npm install/uninstall builders,
+        always including --ignore-scripts) and PY_PACKAGE_MANAGERS (uv add/remove)
+        next to the existing builder tables. No schema change.
+      - javascript/dep.ts: js_dep_add { packages 1..20, dev? },
+        js_dep_remove { packages 1..20 }; strict npm name grammar (no version,
+        range, URL, git, alias, uppercase, or empty); argv from the configured
+        manager; details per the plan. Path scope is not relevant here, but the
+        envelope, timeout, and output caps are.
+      - expo/dep-add.ts + expo/index.ts: expo_dep_add { packages 1..20 }, argv
+        exactly npx expo install <names> (no npm fallback).
+      - Register with bindCompanionConfig + runTool, matching the formatter
+        registration. Every tool: exposure "direct", defaultActive false,
+        one-line promptSnippet, readOnlyHint false.
+      - Offline test proof: a labelled stub npm/npx on PATH records argv and
+        writes a known package.json + lockfile diff; assert exact argv and exact
+        diff. Add a real-binary branch that skips with a printed reason.
+      Run `npx biome check .` on your slice, then `npm run typecheck` and
+      `npm test`; report exact counts, RED/GREEN evidence, a Ponytail
+      reconciliation per change, and the lifecycle/side-effect reconciliation
+      for your tools. Report to the supervisor only.
+
+  - id: "dep_py"
+    title: "Python dependency-tool implementer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.70
+    system_prompt: |
+      Implementation run P1b. You own companions/python/dep.ts (py_dep_add,
+      py_dep_remove), the companions/python/index.ts registration, and their
+      tests. Do NOT change companions/config.ts (dep_js adds PY_PACKAGE_MANAGERS
+      there — import it, do not edit it), companions/process.ts, companions/git/**,
+      the formatter or lint-fix tools, src/, or extensions/.
+
+      Read docs/plans/pi-nobash-companions-implementation-plan.md (A3, P1-6),
+      companions/python/format-write.ts, and companions/config.ts first. Wait
+      until dep_js has added PY_PACKAGE_MANAGERS before finishing your module (the
+      supervisor orders this). Then, test-first:
+      - py_dep_add { packages 1..20, dev? }, py_dep_remove { packages 1..20 }.
+      - PEP 508 name grammar only: [A-Za-z0-9._-]+, no extras (pkg[extra]), no
+        specifier (pkg>=2), no URL, no VCS (git+https://...) — all INVALID_ARGUMENT
+        before any spawn.
+      - argv exactly uv add [--dev] <names> / uv remove <names>, from the
+        configured python.packageManager builder.
+      - Register with bindCompanionConfig + runTool; exposure "direct",
+        defaultActive false, one-line promptSnippet, readOnlyHint false.
+      - Offline test proof: a labelled uv stub on PATH records argv and writes a
+        known pyproject.toml + uv.lock diff; assert exact argv and exact diff,
+        plus a real-binary branch that skips with a printed reason.
+      Run `npx biome check .` on your slice, then `npm run typecheck` and
+      `npm test`; report exact counts, RED/GREEN evidence, a Ponytail
+      reconciliation per change, and the lifecycle/side-effect reconciliation.
+      Report to the supervisor only.
+
+  - id: "reviewer"
+    title: "Independent P1b reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.70
+    system_prompt: |
+      You are the designated attester for P1b; only your verdict block is trusted
+      by the finalize gate. Read the actual code and tests — a peer's claim is not
+      evidence. Your one allowed command is exactly `npx biome check .`; run
+      nothing else.
+
+      Verify against docs/plans/pi-nobash-companions-implementation-plan.md (A3,
+      P1-3..P1-6) and the DoD:
+      - Every tool exists, is registered, and spawns the exact frozen argv;
+        `--ignore-scripts` is present in every npm install/uninstall argv and
+        expo uses npx expo install (no npm fallback).
+      - Name grammars are strict and tested: no version, range, URL, git, alias,
+        extras, uppercase, or empty; LIMIT_EXCEEDED at 21.
+      - The offline stub tests are non-vacuous (exact argv, exact diff) and a stub
+        is never counted as a real-binary pass; the real-binary branch skips with
+        a printed reason.
+      - The error boundary matches: name-form -> INVALID_ARGUMENT; unsupported
+        manager/inexpressible -> CAPABILITY_GAP; zero spawns where intended.
+      - The backend is config-only; no schema exposes backend/version/flag.
+      - Lifecycle claims match the code and A3 (network, install scripts,
+        lockfile, manifest), including the expo exception.
+      - Metadata (exposure/defaultActive/promptSnippet/readOnlyHint), write scope
+        (src/ and extensions/ unchanged; process.ts, git/**, formatters, linters
+        untouched), and Ponytail reconciliations are all non-vacuous.
+      - Run `npx biome check .` on the final tree and report the exact output to
+        the supervisor for plan.md; raise any reported issue as blocking unless
+        fixed and rerun clean.
+      Reply APPROVE or CHANGES_REQUESTED with file evidence. For the attestation,
+      copy EVERY DoD criterion verbatim, in order, into a fenced JSON array with
+      exactly one {"criterion","result":"pass"|"fail","evidence"} per item. A
+      missing, rephrased, or failed criterion fails the run. Report to the
+      supervisor only; never edit files.
+
+validation:
+  commands:
+    - "npm run typecheck"
+    - "npm test"
+    - "npx biome check ."

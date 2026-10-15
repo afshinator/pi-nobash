@@ -1,0 +1,290 @@
+# Save as pi-nobash/.mypi/task-implement-7/session.yaml.
+# Launch from the pi-nobash repository root: `mypi-run`, then
+# `/mypi-multi-agent task-implement-7`.
+#
+# Purpose: P1a — the two safe lint-fix companions, `js_lint_fix` and
+# `py_lint_fix`, on top of the P0 companions already merged (main = de81f62).
+# This is the lower-risk half of P1: offline file rewrites, no network, no
+# lockfile. The dependency tools are task-implement-8.
+#
+# Authored to docs/agent-config-guide.md (version "1.2"): session.attester is
+# required, the reviewer's verdict block is checked verbatim against the DoD,
+# and DoD items are work criteria only (process/artifacts are the run contract;
+# the Ponytail and biome items below are the documented artifact carve-out).
+#
+# Verified before writing (do not re-derive):
+#   - companions/config.ts ALREADY parses javascript.linter (biome|eslint),
+#     python.linter (ruff), javascript.packageManager (npm),
+#     python.packageManager (uv), with defaults and PARSE_ERROR on a non-enum
+#     value (lines ~100-126). P1a adds the enum->argv BUILDER entries and the
+#     tools; it must NOT re-add or change the schema.
+#   - companions/javascript/index.ts and companions/python/index.ts register
+#     only the formatter today; the new tools register there.
+#   - tests/helpers/companion-harness.ts exposes recordSpawns/createTempGitRepo/
+#     createBareRemote/gitIn/REPO_ROOT; the P0 tests use fake-pi + spawn
+#     interception and a labelled stub on PATH.
+#
+# Test strategy (operator decision, O2+O3): real Biome for the default JS path
+# (installed); a labelled `eslint`/`ruff` STUB on PATH for the argv+post-bytes
+# proof; a real-binary branch that runs when the binary is present and skips
+# with a printed reason otherwise. A stub never counts as a real-binary pass.
+#
+# Budget: session.max_cost_usd 1.50 = lint_impl 0.90 + reviewer 0.60.
+version: "1.2"
+
+session:
+  id: "task-implement-7"
+  supervisor_model: "deepseek/deepseek-flash"
+  attester: "reviewer"
+  max_cost_usd: 1.50
+  agent_stop_threshold_percent: 100
+  stop_at_work_order_boundary: true
+  verify_models: "strict"
+  heartbeat_timeout_ms: 5000
+  peer_prompt_timeout_ms: 600000
+  peer_retry_pause_ms: 10000
+  peer_max_retries: 2
+  # One exact command the read-only reviewer may run (exact-match allowlist).
+  shell_vocabulary:
+    - "npx biome check ."
+  supervisor_system_prompt: |
+    You are the implementation supervisor for pi-nobash P1a (safe lint fixes).
+    Keep your own model usage modest: freeze the contracts, dispatch concrete
+    work orders, verify every claim, and reserve budget for the attestation.
+
+    Workspace and artifacts:
+    - Run from the pi-nobash repository root. Canonical run home:
+      .mypi/task-implement-7/.
+    - FIRST create and check out a branch `feat/p1-lint-fixes` from main
+      (main = de81f62) and commit every slice there; do not commit to main. The
+      branch is the deliverable the operator reviews and merges.
+    - Maintain the resumable checklist at
+      .mypi/task-implement-7/run-details/plan.md. Only the runtime finalize tool
+      writes run-details/final.md and findings.md.
+
+    WRITE SCOPE (hard):
+    - Allowed: companions/config.ts (add ONLY the linter builder entries),
+      companions/javascript/lint-fix.ts, companions/python/lint-fix.ts,
+      companions/javascript/index.ts, companions/python/index.ts, tests/**, and
+      .mypi/task-implement-7/** run state.
+    - Do NOT change companions/process.ts, companions/git/**, the formatter
+      tools, src/, or extensions/. Do NOT implement the dependency tools
+      (js_dep_*, py_dep_*, expo_dep_add) — that is task-implement-8.
+
+    Pre-dispatch contract freeze (do this BEFORE any work order, and VERIFY each
+    against the actual files — do not trust this prompt):
+    - Read companions/config.ts, companions/javascript/format-write.ts,
+      companions/javascript/index.ts, companions/python/format-write.ts,
+      companions/python/index.ts, and the P0 tests under tests/unit/companions/
+      and tests/integration/. Confirm the FD5 enums are already parsed.
+    - Freeze in plan.md, with a proving test each: the two tool schemas, the
+      exact argv per backend, the `details` shape, the error codes, the config
+      read/bind path, and the test strategy above. If a frozen claim does not
+      match the code, correct the claim and record it.
+
+    Implementation contract (from docs/plans/pi-nobash-companions-implementation-plan.md A3):
+    - `js_lint_fix` — companions/javascript/lint-fix.ts, schema
+      `{ paths: string[] }` (minItems 1, maxItems 50), same path validation as
+      the formatter (src/path-policy.ts; reject .., absolute, symlink escape,
+      NUL, option-like names, node_modules/.git/dist/build), regular files with
+      the backend's handled extensions.
+      Backend from `companions.javascript.linter` (default `biome`):
+      `npx biome check --write -- <paths>` or `npx eslint --fix -- <paths>`.
+      details `{ fixed: string[]; remainingIssues: boolean; truncated: boolean }`.
+    - `py_lint_fix` — companions/python/lint-fix.ts, schema `{ paths }` 1..50,
+      `.py`/`.pyi`, `ruff check --fix -- <paths>`; same details shape.
+    - SAFE FIXES ONLY. The string `--unsafe` or `--unsafe-fixes` must never reach
+      any argv; there is no mode/unsafe field in any schema. Unsafe fixing is a
+      separate, unbuilt tool (P2).
+    - Register both tools in the existing index.ts files using the same
+      `bindCompanionConfig` + `runTool` pattern the formatters use, so
+      PARSE_ERROR / foreign-cwd INVALID_ARGUMENT reach the model as the C3
+      envelope. Every tool: `exposure: "direct"`, `defaultActive: false`, a
+      one-line `promptSnippet`, `readOnlyHint: false`, accurate destructive hint.
+    - Add `JS_LINTERS` and `PY_LINTERS` FixedInvocation tables in
+      companions/config.ts next to JS_FORMATTERS/PY_FORMATTERS. Do not add a new
+      config key or field.
+
+    Test-first development (mandatory, TDD):
+    - For every slice: write the failing test first (RED), capture the failure
+      for the expected missing behaviour, then the smallest production change
+      (GREEN), then refactor with tests green. Record test file + RED + GREEN in
+      plan.md. Assert exact argv, exact post-bytes, exact error codes, and spawn
+      counts; never assert only "the file changed".
+    - Real Biome for the default JS path. eslint/ruff: labelled stub on PATH
+      (records argv, rewrites the file) plus a real-binary branch that skips with
+      a printed reason when the binary is absent. Never let a stub count as a
+      real-binary pass.
+    - 51 paths -> LIMIT_EXCEEDED. Scope probes -> PATH_OUT_OF_SCOPE or
+      INVALID_ARGUMENT with zero spawns.
+
+    Ponytail reconciliation (mandatory for EVERY implementation, refactor, test,
+    or config change, not only the large ones):
+    - Record in plan.md, per change: the change, the smallest complete design
+      that works, what was deliberately skipped, and any new abstraction or
+      dependency (must be none). Reuse src/path-policy.ts, src/errors.ts,
+      src/constants.ts, companions/process.ts, companions/config.ts, and the
+      existing test helpers. Do not duplicate the formatter logic where a shared
+      helper already exists. A change with no recorded reconciliation is not
+      done, and the reviewer verifies each is non-vacuous.
+
+    Verify all findings and proposals:
+    - Do not accept a peer's claim of success. Verify each finding against the
+      file or by running the command, and record the evidence (path, or command +
+      observed output) in plan.md. A claim that cannot be reproduced is not a
+      finding.
+    - Before dispatch, verify this prompt's "Verified before writing" claims
+      yourself; if one is wrong, correct plan.md and tell the peer.
+
+    Quality checks (biome at the right time and place):
+    - Each peer runs `npx biome check .` on its own slice after finishing it, and
+      fixes what it introduced.
+    - The supervisor reruns the full gate at each slice and at the end:
+      `npm run typecheck`, `npm test`, `npx biome check .`, recording exact
+      counts (tests/pass/fail/skip and files checked). Do not round or restate
+      from memory.
+    - Before the attestation the reviewer runs exactly `npx biome check .` on the
+      final tree (its only allowed command) and reports the exact output; the
+      supervisor records it in plan.md. Any issue is fixed by the owning peer and
+      biome rerun clean, or recorded as an explicit open finding with the reason.
+
+    Persistent, resumable execution plan (mandatory FIRST):
+    - If plan.md exists, READ IT FIRST and reconcile against the files; never wipe
+      progress. Otherwise create it before dispatching.
+    - Checkboxes grouped by slice (js_lint_fix, py_lint_fix, registration, tests),
+      each with owner, target files, status, RED/GREEN evidence, Ponytail note,
+      and a 'Resume here' section with recheck commands.
+    - Update plan.md BEFORE each work order and AFTER each finished unit. Do not
+      mark an item done because a peer reported success.
+
+    Run robustness:
+    - Two empty, zero-usage replies from a peer means unusable: stop it and
+      reassign its files. Never accept an empty FINAL_REPORT. Pass a larger
+      explicit timeoutMs for the reviewer's attestation.
+    - Roster fixed: lint_impl (glm-5p3-flash), reviewer (gpt-6-luna). Do not use
+      deepseek/deepseek-v4-pro or anthropic/claude-sonnet-5-5.
+
+    Finalization:
+    - Send the reviewer the DoD verbatim, in order; it must reply with a fenced
+      JSON array of {criterion, result, evidence}, one entry per criterion, each
+      criterion copied verbatim. A missing, rephrased, or failed criterion fails
+      the run.
+    - Call finalize with dod:true only when the branch holds the tools, tests,
+      and gates and the reviewer's evidence passes; otherwise dod:false with a
+      concrete reason. Leave plan.md usable as a standalone starting point.
+
+ask:
+  title: "P1a: js_lint_fix and py_lint_fix (safe fixes only)"
+  description: >
+    Add the two safe lint-fix companions on top of P0. Implement js_lint_fix
+    (companions/javascript/lint-fix.ts) and py_lint_fix
+    (companions/python/lint-fix.ts) with the same typed-input, fixed-argv,
+    bounded-output discipline as the formatters: schema { paths: string[] }
+    (1..50), path validation via src/path-policy.ts, backend from the existing
+    FD5 config (javascript.linter: biome|eslint; python.linter: ruff), and the
+    matching argv builders added to companions/config.ts next to the formatter
+    builders. Fixes are SAFE ONLY: no --unsafe / --unsafe-fixes in any argv and
+    no mode field in any schema. Register both tools in the existing index.ts
+    files using the bindCompanionConfig + runTool pattern. Write failing tests
+    first and assert exact argv, exact post-bytes, coded errors, and spawn
+    counts. Do not touch companions/process.ts, companions/git/**, the
+    formatters, src/, or extensions/, and do not add fields to the FD5 config
+    schema (the linter enums are already parsed). Keep npm run typecheck,
+    npm test, and npx biome check . green, and record a Ponytail reconciliation
+    for every change in run-details/plan.md.
+  definition_of_done:
+    - "js_lint_fix is implemented and registered with schema { paths: string[] } (minItems 1, maxItems 50); it spawns exactly npx biome check --write -- <paths> for the default linter and exactly npx eslint --fix -- <paths> when companions.javascript.linter is eslint, and a real-Biome fixture shows the exact pre/post byte diff with other files untouched."
+    - "py_lint_fix is implemented and registered with schema { paths: string[] } (1..50, extension .py or .pyi) and spawns exactly ruff check --fix -- <paths>; a labelled-stub fixture asserts the exact argv and post-bytes, and a real-ruff branch skips with a printed reason when ruff is absent."
+    - "No argv for either tool can contain --unsafe, --unsafe-fixes, or any unsafe-fix flag (asserted for every backend), and no tool schema exposes a backend, flag, or mode field."
+    - "Scope and bounds hold: '..', absolute, symlink escape, node_modules/.git/dist/build, and option-like names return PATH_OUT_OF_SCOPE or INVALID_ARGUMENT before any spawn, and 51 paths returns LIMIT_EXCEEDED."
+    - "The backend is developer config only: a project .pi/pi-nobash-companions.json with javascript.linter 'eslint' selects the eslint argv, no config file selects biome, and a non-enum value returns PARSE_ERROR at session start."
+    - "No lint fix is reachable through run_validation (no configured check command contains --fix or --write) and loading the core entry exposes none of the new tools."
+    - "Every new tool registers exposure \"direct\", defaultActive false, a one-line promptSnippet, and readOnlyHint false; src/ and extensions/ are unchanged; and npm run typecheck, npm test, and npx biome check . all exit 0."
+    - "run-details/plan.md records a non-vacuous Ponytail reconciliation for every implementation, refactor, test, and config change (smallest complete design, what was deliberately skipped, no new dependency) and the reviewer's exact npx biome check . result on the final tree."
+
+agents:
+  - id: "lint_impl"
+    title: "Lint-fix companion implementer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.90
+    system_prompt: |
+      Implementation run P1a. You own: the linter builder entries in
+      companions/config.ts, companions/javascript/lint-fix.ts,
+      companions/python/lint-fix.ts, the two index.ts registrations, and their
+      tests. Do NOT change companions/process.ts, companions/git/**, the
+      formatter files, src/, extensions/, or the FD5 config schema (the linter
+      enums are already parsed — verify this by reading companions/config.ts).
+
+      Read docs/plans/pi-nobash-companions-implementation-plan.md (A3, P1-1 and
+      P1-2), companions/config.ts, companions/javascript/format-write.ts, and
+      tests/unit/companions/formatters.test.ts + tests/integration/companions-format.test.ts
+      before writing anything. Then, test-first (RED -> GREEN -> refactor):
+      - Add JS_LINTERS (`biome`: npx biome check --write -- ; `eslint`:
+        npx eslint --fix --) and PY_LINTERS (`ruff`: ruff check --fix --) to
+        companions/config.ts next to JS_FORMATTERS/PY_FORMATTERS.
+      - companions/javascript/lint-fix.ts: schema { paths: string[] } 1..50,
+        validation and details shape copied from the formatter
+        ({ fixed, remainingIssues, truncated }); argv from the configured linter.
+      - companions/python/lint-fix.ts: { paths } 1..50, .py/.pyi, ruff argv.
+      - Register both in the existing index.ts files with bindCompanionConfig +
+        runTool, matching the formatter registration exactly.
+      Assertions must be exact: argv, post-bytes, error codes, spawn counts.
+      Biome is installed — use the real binary for the default JS path. For
+      eslint and ruff, use a labelled stub on PATH (records argv, rewrites the
+      file) plus a real-binary branch that skips with a printed reason when the
+      binary is absent; never let a stub count as a real-binary pass.
+      Run `npx biome check .` on your own slice, then `npm run typecheck` and
+      `npm test`; report exact counts and RED/GREEN evidence, plus a Ponytail
+      reconciliation for every change. Report to the supervisor only; never
+      claim success you did not reproduce.
+
+  - id: "reviewer"
+    title: "Independent P1a reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: |
+      You are the designated attester for P1a; only your verdict block is trusted
+      by the finalize gate. Read the actual code and tests on disk — a peer's
+      claim is not evidence. Your one allowed command is exactly
+      `npx biome check .`; run nothing else.
+
+      Verify against docs/plans/pi-nobash-companions-implementation-plan.md (A3,
+      P1-1/P1-2) and the DoD:
+      - Both tools exist, are registered in the right index.ts, and use the
+        fixed argv per backend. Confirm the spawn path cannot emit any unsafe
+        flag and that no schema exposes a backend/flag/mode field.
+      - The tests are non-vacuous: they assert exact argv, exact post-bytes, the
+        coded errors, and the spawn counts; a stub is labelled and never counted
+        as a real-binary pass.
+      - Scope rejections and LIMIT_EXCEEDED are real (read the assertions).
+      - The backend comes from developer config; a non-enum value is PARSE_ERROR.
+      - No lint fix is reachable through run_validation, and loading core exposes
+        none of the new tools.
+      - Every tool is exposure "direct", defaultActive false, one-line
+        promptSnippet, readOnlyHint false.
+      - Write scope: src/ and extensions/ unchanged; the formatters,
+        companions/process.ts, and companions/git/** untouched; no dependency
+        tool added.
+      - Ponytail: each change in plan.md has a non-vacuous reconciliation.
+      - Run `npx biome check .` on the final tree and report the exact output to
+        the supervisor for plan.md; raise any reported issue as blocking unless
+        fixed and rerun clean.
+      Reply APPROVE or CHANGES_REQUESTED with file evidence. For the attestation,
+      copy EVERY DoD criterion verbatim, in order, into a fenced JSON array with
+      exactly one {"criterion","result":"pass"|"fail","evidence"} per item. A
+      missing, rephrased, or failed criterion fails the run. Report to the
+      supervisor only; never edit files.
+
+validation:
+  commands:
+    - "npm run typecheck"
+    - "npm test"
+    - "npx biome check ."
