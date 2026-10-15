@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerExpoTools } from "../../companions/expo/index.ts";
 import { registerGitMutationTools } from "../../companions/git/index.ts";
 import { registerJsTools } from "../../companions/javascript/index.ts";
 import { registerPythonTools } from "../../companions/python/index.ts";
-import { registerExpoTools } from "../../companions/expo/index.ts";
 
 type AnyTool = {
 	name: string;

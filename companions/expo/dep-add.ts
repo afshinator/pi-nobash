@@ -9,11 +9,8 @@ import {
 	ToolError,
 	type ToolErrorDetails,
 } from "../../src/errors.ts";
+import { assertNpmPackageName, MAX_DEP_PACKAGES } from "../javascript/dep.ts";
 import { execFixed } from "../process.ts";
-import {
-	assertNpmPackageName,
-	MAX_DEP_PACKAGES,
-} from "../javascript/dep.ts";
 
 /**
  * P1-5 expo_dep_add. Installs Expo packages via `npx expo install`, whose

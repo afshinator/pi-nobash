@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runTool } from "../../src/errors.ts";
 import { bindCompanionConfig } from "../config.ts";
-import { expoDepAddTool, expoDepAdd } from "./dep-add.ts";
+import { expoDepAdd, expoDepAddTool } from "./dep-add.ts";
 
 /**
  * Registers the Expo companion tool. There is no expo backend enum: the

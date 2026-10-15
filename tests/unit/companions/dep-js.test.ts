@@ -13,7 +13,6 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-	bindCompanionConfig,
 	type DepCommands,
 	JS_PACKAGE_MANAGERS,
 } from "../../../companions/config.ts";
@@ -573,17 +572,23 @@ test("config boundary: packageManager pnpm -> PARSE_ERROR envelope with zero spa
 	}
 });
 
+import {
+	expoDepAdd,
+	expoDepAddTool,
+} from "../../../companions/expo/dep-add.ts";
+import { registerExpoTools } from "../../../companions/expo/index.ts";
 // --- slice C: expo_dep_add (same grammar, frozen `npx expo install` argv) ---
 import { assertNpmPackageName } from "../../../companions/javascript/dep.ts";
-import { expoDepAdd, expoDepAddTool } from "../../../companions/expo/dep-add.ts";
-import { registerExpoTools } from "../../../companions/expo/index.ts";
 
 test("npm grammar is one exported function reused by expo (F5)", () => {
 	assert.equal(typeof assertNpmPackageName, "function");
-	assert.throws(() => assertNpmPackageName("pkg@1.2.3"), (e: unknown) => {
-		assert.equal((e as { code: string }).code, "INVALID_ARGUMENT");
-		return true;
-	});
+	assert.throws(
+		() => assertNpmPackageName("pkg@1.2.3"),
+		(e: unknown) => {
+			assert.equal((e as { code: string }).code, "INVALID_ARGUMENT");
+			return true;
+		},
+	);
 	assert.equal(assertNpmPackageName("lodash"), "lodash");
 });
 
@@ -706,7 +711,13 @@ test("expo registration: exactly expo_dep_add, config-bound envelope", async () 
 		const tool = registered.find((t) => t.name === "expo_dep_add");
 		assert.ok(tool);
 		const out = envelope(
-			await tool.execute("id", { packages: ["expo-router"] }, undefined, undefined, ctx),
+			await tool.execute(
+				"id",
+				{ packages: ["expo-router"] },
+				undefined,
+				undefined,
+				ctx,
+			),
 		);
 		assert.equal(out.isError, false, out.text);
 		assert.equal(calls[0]?.program, "npx");
