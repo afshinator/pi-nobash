@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerExpoTools } from "../../companions/expo/index.ts";
+import { registerFileTools } from "../../companions/files/index.ts";
 import { registerGitMutationTools } from "../../companions/git/index.ts";
 import { registerJsTools } from "../../companions/javascript/index.ts";
 import { registerPythonTools } from "../../companions/python/index.ts";
@@ -41,6 +42,9 @@ const COMPANION_NAMES = [
 	"git_add",
 	"git_commit",
 	"git_push",
+	"git_rm_cached",
+	"fs_copy",
+	"fs_move",
 	"js_format_write",
 	"py_format_write",
 	"js_lint_fix",
@@ -72,6 +76,7 @@ test("D3: companion tools appear only when each companion index is loaded", asyn
 	// Fresh fake pi per companion; core entry is not loaded here.
 	const { pi, tools } = fakePi();
 	registerGitMutationTools(pi);
+	registerFileTools(pi);
 	registerJsTools(pi);
 	registerPythonTools(pi);
 	assert.deepEqual(
@@ -81,6 +86,9 @@ test("D3: companion tools appear only when each companion index is loaded", asyn
 			"git_commit",
 			"git_create_branch",
 			"git_push",
+			"git_rm_cached",
+			"fs_copy",
+			"fs_move",
 			"js_format_write",
 			"js_lint_fix",
 			"js_dep_add",
@@ -113,7 +121,18 @@ test("D3: each companion registers only its own tool names (per-companion fresh 
 		[
 			"companions/git/index.ts",
 			(pi) => registerGitMutationTools(pi),
-			["git_create_branch", "git_add", "git_commit", "git_push"],
+			[
+				"git_create_branch",
+				"git_add",
+				"git_commit",
+				"git_push",
+				"git_rm_cached",
+			],
+		],
+		[
+			"companions/files/index.ts",
+			(pi) => registerFileTools(pi),
+			["fs_copy", "fs_move"],
 		],
 		[
 			"companions/javascript/index.ts",
