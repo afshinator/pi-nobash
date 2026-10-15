@@ -3,10 +3,13 @@ import {
 	chmodSync,
 	existsSync,
 	mkdirSync,
+	mkdtempSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { executeAdd } from "../../companions/git/add.ts";
@@ -467,4 +470,39 @@ test("git_rm_cached: the only rm spawn is exactly git rm -r --cached -- <paths> 
 			),
 		);
 	}
+});
+
+test("git_rm_cached: scope rejections (.., absolute, option-like, pathspec magic, symlink escape) never spawn", async () => {
+	const { recordSpawns } = await import("../helpers/companion-harness.ts");
+	const outside = mkdtempSync(path.join(tmpdir(), "rm-cached-escape-out-"));
+	const r = createTempGitRepo();
+	const rec = recordSpawns();
+	try {
+		// symlink inside the fixture repo pointing outside the workspace
+		writeFileSync(path.join(outside, "secret.txt"), "s\n");
+		symlinkSync(outside, path.join(r.dir, "link"));
+		const cases: Array<[string[], string]> = [
+			[["../x"], "INVALID_ARGUMENT"],
+			[["/etc/passwd"], "INVALID_ARGUMENT"],
+			[["dir/-flag"], "INVALID_ARGUMENT"],
+			[[":(glob)x"], "INVALID_ARGUMENT"],
+			[["link/secret.txt"], "PATH_OUT_OF_SCOPE"],
+		];
+		for (const [paths, expected] of cases) {
+			assert.equal(
+				await errCode(() => executeRmCached({ paths }, undefined, r.dir)),
+				expected,
+				paths[0],
+			);
+		}
+	} finally {
+		rec.restore();
+		r.cleanup();
+		rmSync(outside, { recursive: true, force: true });
+	}
+	assert.equal(
+		rec.spawns.length,
+		0,
+		`scope rejections must not spawn: ${JSON.stringify(rec.spawns)}`,
+	);
 });
