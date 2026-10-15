@@ -12,9 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
-import { JS_LINTERS } from "../../../companions/config.ts";
+import { JS_LINTERS, PY_LINTERS } from "../../../companions/config.ts";
 import { jsLintFix } from "../../../companions/javascript/lint-fix.ts";
 import { jsLintFixTool } from "../../../companions/javascript/lint-fix.ts";
+import { pyLintFix } from "../../../companions/python/lint-fix.ts";
+import { pyLintFixTool } from "../../../companions/python/lint-fix.ts";
 
 const dirs: string[] = [];
 function workspace(): string {
@@ -141,6 +143,19 @@ test("enumerated linter -> exact argv (biome / eslint / ruff)", async () => {
 				truncated: false,
 			});
 		}
+		calls.length = 0;
+		scripted = fakeChild(0, "", "");
+		writeFileSync(path.join(ws, "m.py"), "x = 1\n");
+		const out = envelope(await pyLintFix({ paths: ["m.py"] }, undefined, ws));
+		assert.equal(out.isError, false, out.text);
+		assert.equal(calls.length, 1, "ruff: exactly one spawn");
+		assert.equal(calls[0]?.program, "ruff");
+		assert.deepEqual(calls[0]?.args, [
+			"check",
+			"--fix",
+			"--",
+			path.join(ws, "m.py"),
+		]);
 	} finally {
 		restoreSpawn();
 	}
@@ -157,6 +172,15 @@ test("51 paths -> LIMIT_EXCEEDED with zero spawns", async () => {
 		);
 		assert.equal(js.isError, true);
 		assert.equal(js.details.code, "LIMIT_EXCEEDED");
+		const py = envelope(
+			await pyLintFix(
+				{ paths: paths.map((p) => `${p.slice(0, -3)}.py`) },
+				undefined,
+				ws,
+			),
+		);
+		assert.equal(py.isError, true);
+		assert.equal(py.details.code, "LIMIT_EXCEEDED");
 		assert.equal(calls.length, 0, "no spawn before the limit check");
 	} finally {
 		restoreSpawn();
@@ -203,6 +227,11 @@ test("scope rejections: .., absolute, symlink escape, node_modules, option-like,
 					`unexpected code ${out.details.code} for ${label}`,
 				);
 		}
+		// Python: wrong extension and scope rejections too.
+		writeFileSync(path.join(ws, "ok.py"), "x = 1\n");
+		const py = envelope(await pyLintFix({ paths: ["ok.ts"] }, undefined, ws));
+		assert.equal(py.isError, true);
+		assert.equal(py.details.code, "INVALID_ARGUMENT");
 		assert.equal(
 			calls.length,
 			0,
@@ -236,6 +265,13 @@ test("linter exit 1 is a SUCCESS envelope with remainingIssues true; exit 0 -> f
 		assert.equal(clean.isError, false);
 		assert.equal(clean.details.remainingIssues, false);
 
+		writeFileSync(path.join(ws, "p.py"), "x = 1\n");
+		scripted = fakeChild(1, "", "");
+		const py = envelope(await pyLintFix({ paths: ["p.py"] }, undefined, ws));
+		assert.equal(py.isError, false);
+		assert.equal(py.details.remainingIssues, true);
+		assert.deepEqual(py.details.fixed, ["p.py"]);
+
 	} finally {
 		restoreSpawn();
 	}
@@ -252,13 +288,20 @@ test("timeout -> TIMEOUT", async () => {
 		);
 		assert.equal(out.isError, true);
 		assert.equal(out.details.code, "TIMEOUT");
+		writeFileSync(path.join(ws, "p.py"), "x = 1\n");
+		scripted = slowChild();
+		const py = envelope(
+			await pyLintFix({ paths: ["p.py"] }, undefined, ws, undefined, 80),
+		);
+		assert.equal(py.isError, true);
+		assert.equal(py.details.code, "TIMEOUT");
 	} finally {
 		restoreSpawn();
 	}
 });
 
 test("schema audit — no backend/command/flag field in either lint-fix schema", () => {
-	for (const tool of [jsLintFixTool]) {
+	for (const tool of [jsLintFixTool, pyLintFixTool]) {
 		const keys = collectKeys(tool.parameters);
 		for (const forbidden of [
 			"backend",
@@ -281,7 +324,7 @@ test("schema audit — no backend/command/flag field in either lint-fix schema",
 				`${tool.name}: schema exposes "${forbidden}"`,
 			);
 		}
-		assert.equal(tool.name, "js_lint_fix");
+		assert.equal(tool.name, jsLintFixTool === tool ? "js_lint_fix" : "py_lint_fix");
 		// details shape: exactly fixed/remainingIssues/truncated.
 		const detailKeys = collectKeys(tool.outputSchema);
 		for (const expected of ["fixed", "remainingIssues", "truncated"])
@@ -290,8 +333,13 @@ test("schema audit — no backend/command/flag field in either lint-fix schema",
 });
 
 test("no --unsafe token in any linter argv (F4: safe fixes only)", () => {
-	for (const [name, inv] of Object.entries(JS_LINTERS)) {
-		for (const arg of inv.args)
-			assert.ok(!arg.includes("unsafe"), `${name}: unsafe token in argv: ${arg}`);
+	for (const table of [JS_LINTERS, PY_LINTERS]) {
+		for (const [name, inv] of Object.entries(table)) {
+			for (const arg of inv.args)
+				assert.ok(
+					!arg.includes("unsafe"),
+					`${name}: unsafe token in argv: ${arg}`,
+				);
+		}
 	}
 });
