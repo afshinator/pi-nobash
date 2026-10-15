@@ -1,11 +1,12 @@
 /**
- * Offline integration for js_dep_add / js_dep_remove / expo_dep_add (P1-3..P1-5).
+ * Offline integration for js_dep_add / js_dep_remove / expo_dep_add (P1-3..P1-5)
+ * and py_dep_add / py_dep_remove (P1-6/P1-7).
  *
- * A clearly-labelled STUB `npm` / `npx` on PATH records the exact argv and
- * writes a known package.json + lockfile diff; assertions are byte-exact.
- * The real-binary branch runs the REAL npm/npx only when explicitly enabled
- * (a registry install needs network) and otherwise SKIPS with a printed
- * reason.
+ * A clearly-labelled STUB `npm` / `npx` / `uv` on PATH records the exact argv
+ * and writes a known package.json + lockfile (or pyproject.toml + uv.lock)
+ * diff; assertions are byte-exact. The real-binary branch runs the REAL
+ * npm/npx/uv only where the binary (and, for npm, the registry) is reachable,
+ * and otherwise SKIPS with a printed reason.
  */
 
 import assert from "node:assert/strict";
@@ -26,6 +27,7 @@ import { afterEach, test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerExpoTools } from "../../companions/expo/index.ts";
 import { registerJsTools } from "../../companions/javascript/index.ts";
+import { registerPythonTools } from "../../companions/python/index.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -427,4 +429,156 @@ test("expo_dep_add (REAL expo): skipped unless a LOCAL expo binary exists", {
 		pkg.dependencies?.["expo-constants"],
 		"expo-constants present in package.json",
 	);
+});
+
+// --- Python section (P1-6/P1-7): labelled `uv` STUB + real-uv branch ---
+// `uv` is NOT on PATH here, so the real-uv branch SKIPS with a printed reason;
+// the STUB cases below never claim a real-binary pass.
+
+const STUB_UV = `
+const args = process.argv.slice(2);
+const op = args[0];
+const dev = args.includes("--dev");
+const names = args.slice(1).filter((a) => !a.startsWith("-"));
+const deps = op === "remove" ? [] : names;
+const pinned = deps.map((n) => '"' + n + '==1.3.0"').join(", ");
+const project = dev
+  ? '[project]\\nname = "fixture"\\nversion = "1.0.0"\\n\\n[dependency-groups]\\ndev = [' + pinned + ']\\n'
+  : '[project]\\nname = "fixture"\\nversion = "1.0.0"\\ndependencies = [' + pinned + ']\\n';
+fs.writeFileSync(process.cwd() + "/pyproject.toml", project);
+fs.writeFileSync(process.cwd() + "/uv.lock", "stub-uv-lock: " + op + " " + names.join(",") + "\\n");
+`;
+
+function uvWorkspace(
+	fixture: string,
+	markerName: string,
+): { ws: string; marker: string; realPathEnv: string | undefined } {
+	const ws = realpathSync(
+		mkdtempSync(path.join(tmpdir(), "pi-nobash-pydep-it-")),
+	);
+	dirs.push(ws);
+	const bin = mkdtempSync(path.join(tmpdir(), "pi-nobash-uv-bin-"));
+	dirs.push(bin);
+	const marker = path.join(bin, markerName);
+	writeStubBinary(bin, "uv", STUB_UV, marker);
+	writeCompanionConfig(ws);
+	writeFileSync(path.join(ws, "pyproject.toml"), fixture);
+	// Unrelated file: the tool must not touch anything but the manifest + lockfile.
+	writeFileSync(path.join(ws, "README.md"), "unrelated\n");
+	const realPathEnv = process.env.PATH;
+	process.env.PATH = `${bin}:${realPathEnv}`;
+	return { ws, marker, realPathEnv };
+}
+
+const UV_FIXTURE_ADD =
+	'[project]\nname = "fixture"\nversion = "1.0.0"\ndependencies = []\n';
+
+test("py_dep_add (STUB uv, not real uv): exact argv, exact pyproject.toml + uv.lock diff", async () => {
+	const { ws, marker, realPathEnv } = uvWorkspace(
+		UV_FIXTURE_ADD,
+		"uv-argv.txt",
+	);
+	try {
+		const out = await runTool(registerPythonTools, ws, "py_dep_add", {
+			packages: ["left-pad"],
+		});
+		assert.equal(out.isError, false, out.text);
+		assert.deepEqual(out.details, { packages: ["left-pad"], dev: false });
+
+		// Exact frozen argv, element by element.
+		assert.equal(readFileSync(marker, "utf8"), "add\nleft-pad\n");
+		// Exact manifest diff written by the (stub) package manager.
+		assert.equal(
+			readFileSync(path.join(ws, "pyproject.toml"), "utf8"),
+			'[project]\nname = "fixture"\nversion = "1.0.0"\ndependencies = ["left-pad==1.3.0"]\n',
+		);
+		assert.equal(
+			readFileSync(path.join(ws, "uv.lock"), "utf8"),
+			"stub-uv-lock: add left-pad\n",
+		);
+		assert.equal(
+			readFileSync(path.join(ws, "README.md"), "utf8"),
+			"unrelated\n",
+		);
+	} finally {
+		process.env.PATH = realPathEnv;
+	}
+});
+
+test("py_dep_add --dev (STUB uv): exact argv with --dev, dependency-group diff", async () => {
+	const { ws, marker, realPathEnv } = uvWorkspace(
+		UV_FIXTURE_ADD,
+		"uv-argv-dev.txt",
+	);
+	try {
+		const out = await runTool(registerPythonTools, ws, "py_dep_add", {
+			packages: ["Django"],
+			dev: true,
+		});
+		assert.equal(out.isError, false, out.text);
+		assert.deepEqual(out.details, { packages: ["Django"], dev: true });
+		assert.equal(readFileSync(marker, "utf8"), "add\n--dev\nDjango\n");
+		assert.equal(
+			readFileSync(path.join(ws, "pyproject.toml"), "utf8"),
+			'[project]\nname = "fixture"\nversion = "1.0.0"\n\n[dependency-groups]\ndev = ["Django==1.3.0"]\n',
+		);
+		assert.equal(
+			readFileSync(path.join(ws, "uv.lock"), "utf8"),
+			"stub-uv-lock: add Django\n",
+		);
+	} finally {
+		process.env.PATH = realPathEnv;
+	}
+});
+
+test("py_dep_remove (STUB uv): exact argv, dependency removed from pyproject.toml", async () => {
+	const { ws, marker, realPathEnv } = uvWorkspace(
+		'[project]\nname = "fixture"\nversion = "1.0.0"\ndependencies = ["left-pad==1.3.0"]\n',
+		"uv-argv-remove.txt",
+	);
+	try {
+		const out = await runTool(registerPythonTools, ws, "py_dep_remove", {
+			packages: ["left-pad"],
+		});
+		assert.equal(out.isError, false, out.text);
+		assert.deepEqual(out.details, { packages: ["left-pad"] });
+		assert.equal(readFileSync(marker, "utf8"), "remove\nleft-pad\n");
+		assert.equal(
+			readFileSync(path.join(ws, "pyproject.toml"), "utf8"),
+			'[project]\nname = "fixture"\nversion = "1.0.0"\ndependencies = []\n',
+		);
+		assert.equal(
+			readFileSync(path.join(ws, "uv.lock"), "utf8"),
+			"stub-uv-lock: remove left-pad\n",
+		);
+	} finally {
+		process.env.PATH = realPathEnv;
+	}
+});
+
+test("py_dep_add (REAL uv): runs only when uv is on PATH, otherwise skips with the reason", {
+	timeout: 180_000,
+}, async (t) => {
+	if (!findReal("uv"))
+		return t.skip("uv not on PATH — real-uv branch cannot run here");
+
+	const ws = realpathSync(
+		mkdtempSync(path.join(tmpdir(), "pi-nobash-pydep-real-")),
+	);
+	dirs.push(ws);
+	writeCompanionConfig(ws);
+	writeFileSync(
+		path.join(ws, "pyproject.toml"),
+		'[project]\nname = "real-fixture"\nversion = "1.0.0"\nrequires-python = ">=3.11"\ndependencies = []\n',
+	);
+	const out = await runTool(registerPythonTools, ws, "py_dep_add", {
+		packages: ["is-number"],
+	});
+	assert.equal(out.isError, false, out.text);
+	assert.deepEqual(out.details, { packages: ["is-number"], dev: false });
+	assert.ok(
+		readFileSync(path.join(ws, "pyproject.toml"), "utf8").includes("is-number"),
+		"is-number in pyproject.toml",
+	);
+	assert.ok(existsSync(path.join(ws, "uv.lock")), "uv.lock exists");
 });
