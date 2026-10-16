@@ -59,6 +59,29 @@ export function validateFsPair(
 	};
 }
 
+/**
+ * Single-path guard for fs_delete: exactly { path }, one literal relative path.
+ * Extra keys (multi-path/recursive/flag forms) are CAPABILITY_GAP.
+ */
+export function validateFsSingle(
+	cwd: string,
+	params: object,
+): { path: string; abs: string } {
+	for (const key of Object.keys(params)) {
+		if (key !== "path")
+			throw new ToolError(
+				"CAPABILITY_GAP",
+				`"${key}" is not supported: this tool takes exactly { path } — one path, one operation per call`,
+				key,
+			);
+	}
+	const { path: p } = params as { path: string };
+	if (typeof p !== "string" || p.length === 0)
+		throw new ToolError("INVALID_ARGUMENT", "path must be a non-empty string");
+	// The path passes the workspace policy before any filesystem change.
+	return { path: p, abs: validateWorkspacePath(cwd, p) };
+}
+
 export function statSourceOrNotFound(abs: string, display: string): Stats {
 	try {
 		return statSync(abs);

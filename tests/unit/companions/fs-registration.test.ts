@@ -11,7 +11,7 @@ type AnyTool = {
 	annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
 };
 
-test("registerFileTools registers exactly fs_copy and fs_move with companion metadata", () => {
+test("registerFileTools registers exactly fs_copy, fs_move and fs_delete with companion metadata", () => {
 	const tools: AnyTool[] = [];
 	const pi = {
 		registerTool: (t: AnyTool) => tools.push(t),
@@ -19,7 +19,11 @@ test("registerFileTools registers exactly fs_copy and fs_move with companion met
 		on: () => {},
 	} as unknown as ExtensionAPI;
 	registerFileTools(pi);
-	assert.deepEqual(tools.map((t) => t.name).sort(), ["fs_copy", "fs_move"]);
+	assert.deepEqual(tools.map((t) => t.name).sort(), [
+		"fs_copy",
+		"fs_delete",
+		"fs_move",
+	]);
 	for (const t of tools) {
 		assert.equal(t.exposure, "direct");
 		assert.equal(t.defaultActive, false);

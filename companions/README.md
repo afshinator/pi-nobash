@@ -14,7 +14,7 @@ selection), the Git tools (`git_create_branch`, `git_add`, `git_commit`, `git_pu
 `git_rm_cached`), the file-lifecycle tools (`fs_copy`, `fs_move`), the formatters
 (`js_format_write`, `py_format_write`), the safe lint fixes (`js_lint_fix`, `py_lint_fix`),
 the dependency tools (`js_dep_add`, `js_dep_remove`, `py_dep_add`, `py_dep_remove`), and
-`expo_dep_add`. Planned, not written: `fs_delete` and the Rust/Go tools. The layout below
+`expo_dep_add`. Planned, not written: the Rust/Go tools. The layout below
 marks what is shipped.
 
 **Where the guide lives.** [docs/stacks](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md)
@@ -47,7 +47,7 @@ companions/
   process.ts     execFixed — bounded fixed-argv runner                     (shipped)
   config.ts      .pi/pi-nobash-companions.json loader + enum->argv builders (shipped)
   git/           git_create_branch, git_add, git_commit, git_push, git_rm_cached (shipped)
-  files/         fs_copy, fs_move                                          (shipped)
+  files/         fs_copy, fs_move, fs_delete                                (shipped)
   javascript/    js_format_write, js_lint_fix, js_dep_add, js_dep_remove   (shipped)
   python/        py_format_write, py_lint_fix, py_dep_add, py_dep_remove   (shipped)
   expo/          expo_dep_add                                             (shipped)

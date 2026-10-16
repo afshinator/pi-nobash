@@ -44,6 +44,7 @@ const COMPANION_NAMES = [
 	"git_push",
 	"git_rm_cached",
 	"fs_copy",
+	"fs_delete",
 	"fs_move",
 	"js_format_write",
 	"py_format_write",
@@ -88,6 +89,7 @@ test("D3: companion tools appear only when each companion index is loaded", asyn
 			"git_push",
 			"git_rm_cached",
 			"fs_copy",
+			"fs_delete",
 			"fs_move",
 			"js_format_write",
 			"js_lint_fix",
@@ -132,7 +134,7 @@ test("D3: each companion registers only its own tool names (per-companion fresh 
 		[
 			"companions/files/index.ts",
 			(pi) => registerFileTools(pi),
-			["fs_copy", "fs_move"],
+			["fs_copy", "fs_delete", "fs_move"],
 		],
 		[
 			"companions/javascript/index.ts",

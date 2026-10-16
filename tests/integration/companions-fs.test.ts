@@ -16,6 +16,7 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { executeCopy } from "../../companions/files/copy.ts";
+import { executeDelete } from "../../companions/files/delete.ts";
 import { registerFileTools } from "../../companions/files/index.ts";
 import { executeMove } from "../../companions/files/move.ts";
 import { recordSpawns } from "../helpers/companion-harness.ts";
@@ -70,7 +71,7 @@ async function errCode(fn: () => Promise<unknown>): Promise<{
 	};
 }
 
-test("registration: registerFileTools exposes only fs_copy/fs_move, defaultActive false", () => {
+test("registration: registerFileTools exposes only fs_copy/fs_move/fs_delete, defaultActive false", () => {
 	const tools: { name: string; defaultActive?: boolean }[] = [];
 	const pi = {
 		registerTool: (t: { name: string; defaultActive?: boolean }) =>
@@ -79,7 +80,11 @@ test("registration: registerFileTools exposes only fs_copy/fs_move, defaultActiv
 		on: () => {},
 	} as unknown as ExtensionAPI;
 	registerFileTools(pi);
-	assert.deepEqual(tools.map((t) => t.name).sort(), ["fs_copy", "fs_move"]);
+	assert.deepEqual(tools.map((t) => t.name).sort(), [
+		"fs_copy",
+		"fs_delete",
+		"fs_move",
+	]);
 	for (const t of tools) assert.equal(t.defaultActive, false);
 });
 
@@ -148,6 +153,38 @@ test("fs_copy: a metachar miss is CAPABILITY_GAP 'glob expansion'; a plain miss 
 		),
 		{ code: "NOT_FOUND", capability: undefined },
 	);
+});
+
+test("fs_delete: exact tree — only the named file is removed, others byte-identical, zero spawns", async () => {
+	const ws = workspace();
+	file(ws, "keep.txt", "keep\n");
+	file(ws, "gone.txt", "gone\n");
+	file(ws, "nested/deep.txt", "deep\n");
+	const recorder = recordSpawns();
+	try {
+		const r = (await executeDelete({ path: "gone.txt" }, ws)) as {
+			details: { path: string };
+		};
+		assert.deepEqual(r.details, { path: "gone.txt" });
+		assert.deepEqual(snapshotTree(ws), [
+			{ path: "keep.txt", bytes: "keep\n" },
+			{ path: "nested/deep.txt", bytes: "deep\n" },
+		]);
+		assert.equal(recorder.spawns.length, 0);
+	} finally {
+		recorder.restore();
+	}
+});
+
+test("fs_delete: a directory is refused and the tree is unchanged", async () => {
+	const ws = workspace();
+	file(ws, "dir/inner.txt", "x\n");
+	const before = snapshotTree(ws);
+	assert.deepEqual(await errCode(() => executeDelete({ path: "dir" }, ws)), {
+		code: "CAPABILITY_GAP",
+		capability: "recursive delete",
+	});
+	assert.deepEqual(snapshotTree(ws), before);
 });
 
 test("fs_copy: directory source is CAPABILITY_GAP 'recursive copy', nothing written", async () => {

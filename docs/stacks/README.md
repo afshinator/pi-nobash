@@ -109,7 +109,7 @@ whose effect lands on a shared remote and is not undone by a local reset.
 |---|---|---|---|
 | [`fs_copy`](../../companions/files/copy.ts) | `{ from, to }` | copy one regular file inside the workspace | implemented |
 | [`fs_move`](../../companions/files/move.ts) | `{ from, to }` | move or rename one path inside the workspace | implemented |
-| `fs_delete` | `{ path }` | delete one explicit path | proposed |
+| [`fs_delete`](../../companions/files/delete.ts) | `{ path }` | delete one explicit file (no recursion) | implemented |
 
 Register each as its own tool so an agent gets exactly the operations it needs. Resolve every
 path against the session `cwd` and reject escapes and symlink traversal — pi-nobash's

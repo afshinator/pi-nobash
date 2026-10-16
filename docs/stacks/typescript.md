@@ -36,7 +36,7 @@ pi -e ./pi-nobash -e <repo>/companions/git -e ./my-fs-tools.ts -e <repo>/compani
 | `run_validation` | pi-nobash | no | run the checks in §2 | implemented |
 | [`git_create_branch`](../../companions/git/create-branch.ts) [`git_add`](../../companions/git/add.ts) [`git_commit`](../../companions/git/commit.ts) [`git_push`](../../companions/git/push.ts) | your extension | yes | Git mutations (shared) | implemented |
 | [`fs_copy`](../../companions/files/copy.ts) [`fs_move`](../../companions/files/move.ts) | your extension | yes | file lifecycle (shared) | implemented |
-| `fs_delete` | your extension | yes | delete one explicit path | proposed |
+| [`fs_delete`](../../companions/files/delete.ts) | your extension | yes | delete one explicit file (no recursion) | implemented |
 | [`js_format_write`](../../companions/javascript/format-write.ts) | your extension | yes | formatter write mode (both) | implemented |
 | `js_lint_fix` | your extension | yes | safe lint fixes (both) | proposed |
 | `js_dep_add` `js_dep_remove` | your extension | yes | dependency changes (Node) | proposed |
