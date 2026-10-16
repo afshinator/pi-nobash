@@ -119,7 +119,7 @@ async function formatWriteImpl(
 		);
 		// Conservative details: exit 0 means every validated path was formatted;
 		// formatter stdout layouts are not parsed.
-		// shortcut: details.formatted echoes the input paths, not formatter output.
+		// shortcut: details.formatted echoes the input paths, not formatter output, upgrade when per-file formatter detail is needed
 		return successResult(`formatted ${resolved.length} file(s)`, {
 			formatted: [...params.paths],
 			truncated: outcome.truncated,
