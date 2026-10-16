@@ -13,7 +13,11 @@ import {
 } from "../../src/errors.ts";
 import { validateWorkspaceFile } from "../../src/path-policy.ts";
 import { JS_LINTERS, type JsLinter } from "../config.ts";
-import { execFixed } from "../process.ts";
+import {
+	assertToolPathEntry,
+	assertToolPathResolved,
+	execFixedChecked,
+} from "../process.ts";
 
 /**
  * P1-1 js_lint_fix. Applies SAFE lint fixes to named project files with the
@@ -23,9 +27,7 @@ import { execFixed } from "../process.ts";
  * NOT a failure: `check --write` exits 1 when diagnostics remain after the
  * safe fixes, which surfaces as remainingIssues, not an error.
  */
-export const MAX_LINT_PATHS = 50;
-
-const DENY_SEGMENTS = new Set(["node_modules", ".git", "dist", "build"]);
+const MAX_LINT_PATHS = 50;
 
 /** Fixed per-backend handled-extension sets (F3). */
 const EXTENSIONS: Record<JsLinter, ReadonlySet<string>> = {
@@ -56,13 +58,13 @@ const EXTENSIONS: Record<JsLinter, ReadonlySet<string>> = {
 
 const TIMEOUT_MS = 120_000;
 
-export const lintFixDetailsSchema = Type.Object({
+const lintFixDetailsSchema = Type.Object({
 	fixed: Type.Array(Type.String()),
 	remainingIssues: Type.Boolean(),
 	truncated: Type.Boolean(),
 });
 
-export const parameters = Type.Object({
+const parameters = Type.Object({
 	paths: Type.Array(Type.String(), {
 		minItems: 1,
 		maxItems: MAX_LINT_PATHS,
@@ -94,18 +96,7 @@ async function lintFixImpl(
 		const allowed = EXTENSIONS[linter];
 		const realCwd = realpathSync(cwd);
 		const resolved = params.paths.map((p) => {
-			const segments = p.split("/");
-			if (segments[segments.length - 1]?.startsWith("-"))
-				throw new ToolError(
-					"INVALID_ARGUMENT",
-					`option-like path is not allowed: ${p}`,
-				);
-			for (const seg of segments)
-				if (DENY_SEGMENTS.has(seg.toLowerCase()))
-					throw new ToolError(
-						"PATH_OUT_OF_SCOPE",
-						`path inside ${seg}/ is not lint-fixable: ${p}`,
-					);
+			assertToolPathEntry(p, "lint-fixable");
 			const ext = path.extname(p);
 			if (!allowed.has(ext))
 				throw new ToolError(
@@ -113,30 +104,17 @@ async function lintFixImpl(
 					`${linter} does not lint ${ext || "files without extension"}: ${p}`,
 				);
 			const abs = validateWorkspaceFile(cwd, p);
-			// Deny again on the RESOLVED path: a case-variant segment or an
-			// in-workspace symlink alias must not reach node_modules/.git/dist/build.
-			for (const seg of path
-				.relative(realCwd, realpathSync(abs))
-				.split(path.sep))
-				if (DENY_SEGMENTS.has(seg.toLowerCase()))
-					throw new ToolError(
-						"PATH_OUT_OF_SCOPE",
-						`path inside ${seg}/ is not lint-fixable: ${p}`,
-					);
+			assertToolPathResolved(realCwd, abs, p, "lint-fixable");
 			return abs;
 		});
 		const invocation = JS_LINTERS[linter];
-		const outcome = await execFixed(
+		const outcome = await execFixedChecked(
 			invocation.program,
 			[...invocation.args, ...resolved],
 			cwd,
-			{ timeoutMs, signal },
+			{ timeoutMs, signal, failOnExit: false },
+			`${linter} lint-fix`,
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`${linter} lint-fix timed out after ${timeoutMs} ms`,
-			);
 		// Non-zero exit means diagnostics REMAIN after the safe fixes (F4),
 		// not that the tool failed.
 		// shortcut: details.fixed echoes the input paths, not linter output, upgrade when per-file fix detail is needed

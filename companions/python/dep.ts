@@ -10,7 +10,7 @@ import {
 	type ToolErrorDetails,
 } from "../../src/errors.ts";
 import { PY_PACKAGE_MANAGERS } from "../config.ts";
-import { execFixed } from "../process.ts";
+import { execFixedChecked } from "../process.ts";
 
 /**
  * P1-6/P1-7 py_dep_add / py_dep_remove. Adds/removes BARE PEP 508 package
@@ -39,7 +39,7 @@ type ToolBody<T> = AgentToolResult<T | ToolErrorDetails>;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** Rejects anything that is not a bare PEP 508 name; returns it unchanged. */
-export function assertPyPackageName(name: string): string {
+function assertPyPackageName(name: string): string {
 	const bad = (why: string): never => {
 		throw new ToolError(
 			"INVALID_ARGUMENT",
@@ -53,7 +53,7 @@ export function assertPyPackageName(name: string): string {
 }
 
 /** Validates a whole packages list: LIMIT_EXCEEDED first, then each name. */
-export function validatePyDepPackages(packages: string[]): string[] {
+function validatePyDepPackages(packages: string[]): string[] {
 	if (packages.length > MAX_DEP_PACKAGES)
 		throw new ToolError(
 			"LIMIT_EXCEEDED",
@@ -103,22 +103,13 @@ async function depAddImpl(
 		const dev = params.dev === true;
 		const cmd = lookupManager(manager, dev ? "addDev" : "add");
 		const label = [cmd.program, ...cmd.args].join(" ");
-		const outcome = await execFixed(
+		await execFixedChecked(
 			cmd.program,
 			[...cmd.args, ...packages],
 			cwd,
 			{ timeoutMs, signal },
+			label,
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`${label} timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`${label} failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		return successResult(
 			`added ${packages.length} package${packages.length === 1 ? "" : "s"}${dev ? " (dev)" : ""}`,
 			{ packages, dev },
@@ -137,22 +128,13 @@ async function depRemoveImpl(
 		const packages = validatePyDepPackages(params.packages);
 		const cmd = lookupManager(manager, "remove");
 		const label = [cmd.program, ...cmd.args].join(" ");
-		const outcome = await execFixed(
+		await execFixedChecked(
 			cmd.program,
 			[...cmd.args, ...packages],
 			cwd,
 			{ timeoutMs, signal },
+			label,
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`${label} timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`${label} failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		return successResult(
 			`removed ${packages.length} package${packages.length === 1 ? "" : "s"}`,
 			{ packages },
@@ -187,17 +169,17 @@ const depPackages = Type.Array(Type.String(), {
 	description: "PyPI package names (no extras, specifier, URL, or VCS link)",
 });
 
-export const pyDepAddParameters = Type.Object({
+const pyDepAddParameters = Type.Object({
 	packages: depPackages,
 	dev: Type.Optional(Type.Boolean({ description: "Add as a dev dependency" })),
 });
-export const pyDepRemoveParameters = Type.Object({ packages: depPackages });
+const pyDepRemoveParameters = Type.Object({ packages: depPackages });
 
-export const pyDepAddDetailsSchema = Type.Object({
+const pyDepAddDetailsSchema = Type.Object({
 	packages: Type.Array(Type.String()),
 	dev: Type.Boolean(),
 });
-export const pyDepRemoveDetailsSchema = Type.Object({
+const pyDepRemoveDetailsSchema = Type.Object({
 	packages: Type.Array(Type.String()),
 });
 

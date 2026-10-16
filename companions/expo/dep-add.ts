@@ -10,7 +10,7 @@ import {
 	type ToolErrorDetails,
 } from "../../src/errors.ts";
 import { assertNpmPackageName, MAX_DEP_PACKAGES } from "../javascript/dep.ts";
-import { execFixed } from "../process.ts";
+import { execFixedChecked } from "../process.ts";
 
 /**
  * P1-5 expo_dep_add. Installs Expo packages via `npx expo install`, whose
@@ -45,22 +45,13 @@ async function expoDepAddImpl(
 				`too many packages (max ${MAX_DEP_PACKAGES}); add in batches`,
 			);
 		const packages = params.packages.map(assertNpmPackageName);
-		const outcome = await execFixed(
+		await execFixedChecked(
 			EXPO_INSTALL.program,
 			[...EXPO_INSTALL.args, ...packages],
 			cwd,
 			{ timeoutMs, signal },
+			"expo install",
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`expo install timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`expo install failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		return successResult(
 			`added ${packages.length} package${packages.length === 1 ? "" : "s"}`,
 			{ packages },
@@ -78,7 +69,7 @@ export function expoDepAdd(
 	return expoDepAddImpl(params, signal, cwd, timeoutMs);
 }
 
-export const expoDepAddParameters = Type.Object({
+const expoDepAddParameters = Type.Object({
 	packages: Type.Array(Type.String(), {
 		minItems: 1,
 		maxItems: MAX_DEP_PACKAGES,
@@ -87,7 +78,7 @@ export const expoDepAddParameters = Type.Object({
 	}),
 });
 
-export const expoDepAddDetailsSchema = Type.Object({
+const expoDepAddDetailsSchema = Type.Object({
 	packages: Type.Array(Type.String()),
 });
 

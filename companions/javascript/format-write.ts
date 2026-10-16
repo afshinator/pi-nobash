@@ -13,7 +13,11 @@ import {
 } from "../../src/errors.ts";
 import { validateWorkspaceFile } from "../../src/path-policy.ts";
 import { JS_FORMATTERS, type JsFormatter } from "../config.ts";
-import { execFixed } from "../process.ts";
+import {
+	assertToolPathEntry,
+	assertToolPathResolved,
+	execFixedChecked,
+} from "../process.ts";
 
 /**
  * P0-5 js_format_write. Formats named project files in place with the
@@ -22,9 +26,7 @@ import { execFixed } from "../process.ts";
  * only. Formatter project-config discovery (prettier.config / biome.json) is
  * the formatter's own; this tool passes no formatting flags.
  */
-export const MAX_FORMAT_PATHS = 50;
-
-const DENY_SEGMENTS = new Set(["node_modules", ".git", "dist", "build"]);
+const MAX_FORMAT_PATHS = 50;
 
 /** Fixed per-backend handled-extension sets (P0-5). */
 const EXTENSIONS: Record<JsFormatter, ReadonlySet<string>> = {
@@ -60,12 +62,12 @@ const EXTENSIONS: Record<JsFormatter, ReadonlySet<string>> = {
 
 const TIMEOUT_MS = 120_000;
 
-export const formatWriteDetailsSchema = Type.Object({
+const formatWriteDetailsSchema = Type.Object({
 	formatted: Type.Array(Type.String()),
 	truncated: Type.Boolean(),
 });
 
-export const parameters = Type.Object({
+const parameters = Type.Object({
 	paths: Type.Array(Type.String(), {
 		minItems: 1,
 		maxItems: MAX_FORMAT_PATHS,
@@ -96,18 +98,7 @@ async function formatWriteImpl(
 		const allowed = EXTENSIONS[formatter];
 		const realCwd = realpathSync(cwd);
 		const resolved = params.paths.map((p) => {
-			const segments = p.split("/");
-			if (segments[segments.length - 1]?.startsWith("-"))
-				throw new ToolError(
-					"INVALID_ARGUMENT",
-					`option-like path is not allowed: ${p}`,
-				);
-			for (const seg of segments)
-				if (DENY_SEGMENTS.has(seg.toLowerCase()))
-					throw new ToolError(
-						"PATH_OUT_OF_SCOPE",
-						`path inside ${seg}/ is not formattable: ${p}`,
-					);
+			assertToolPathEntry(p, "formattable");
 			const ext = path.extname(p);
 			if (!allowed.has(ext))
 				throw new ToolError(
@@ -115,35 +106,17 @@ async function formatWriteImpl(
 					`${formatter} does not format ${ext || "files without extension"}: ${p}`,
 				);
 			const abs = validateWorkspaceFile(cwd, p);
-			// Deny again on the RESOLVED path: a case-variant segment or an
-			// in-workspace symlink alias must not reach node_modules/.git/dist/build.
-			for (const seg of path
-				.relative(realCwd, realpathSync(abs))
-				.split(path.sep))
-				if (DENY_SEGMENTS.has(seg.toLowerCase()))
-					throw new ToolError(
-						"PATH_OUT_OF_SCOPE",
-						`path inside ${seg}/ is not formattable: ${p}`,
-					);
+			assertToolPathResolved(realCwd, abs, p, "formattable");
 			return abs;
 		});
 		const invocation = JS_FORMATTERS[formatter];
-		const outcome = await execFixed(
+		const outcome = await execFixedChecked(
 			invocation.program,
 			[...invocation.args, ...resolved],
 			cwd,
 			{ timeoutMs, signal },
+			`${formatter} format`,
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`${formatter} format timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`${formatter} format failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		// Conservative details: exit 0 means every validated path was formatted;
 		// formatter stdout layouts are not parsed.
 		// shortcut: details.formatted echoes the input paths, not formatter output.

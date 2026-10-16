@@ -1,7 +1,78 @@
 import childProcess from "node:child_process";
+import { realpathSync } from "node:fs";
+import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
-import { truncateUtf8 } from "../src/errors.ts";
+import { ToolError, truncateUtf8 } from "../src/errors.ts";
 import { MAX_GIT_STREAM_BYTES } from "../src/git/exec.ts";
+
+/**
+ * Deny-list segments shared by the fixed-argv path tools (format/lint) and
+ * the shared per-path checks below. The RESOLVED path is denied again to stop
+ * case-variant segments and in-workspace symlink aliases.
+ */
+const TOOL_DENY_SEGMENTS = new Set(["node_modules", ".git", "dist", "build"]);
+
+/** Option-like path and deny-segment checks (raw path). */
+export function assertToolPathEntry(p: string, actionWord: string): void {
+	const segments = p.split("/");
+	if (segments[segments.length - 1]?.startsWith("-"))
+		throw new ToolError(
+			"INVALID_ARGUMENT",
+			`option-like path is not allowed: ${p}`,
+		);
+	for (const seg of segments)
+		if (TOOL_DENY_SEGMENTS.has(seg.toLowerCase()))
+			throw new ToolError(
+				"PATH_OUT_OF_SCOPE",
+				`path inside ${seg}/ is not ${actionWord}: ${p}`,
+			);
+}
+
+/** Deny-segment check again on the RESOLVED path; call after resolve. */
+export function assertToolPathResolved(
+	realCwd: string,
+	abs: string,
+	p: string,
+	actionWord: string,
+): void {
+	for (const seg of path.relative(realCwd, realpathSync(abs)).split(path.sep))
+		if (TOOL_DENY_SEGMENTS.has(seg.toLowerCase()))
+			throw new ToolError(
+				"PATH_OUT_OF_SCOPE",
+				`path inside ${seg}/ is not ${actionWord}: ${p}`,
+			);
+}
+
+/**
+ * execFixed plus the shared TIMEOUT / VALIDATION_FAILED outcome handling.
+ * `label` is the exact text the caller used in its error messages.
+ */
+export function execFixedChecked(
+	program: string,
+	args: string[],
+	cwd: string,
+	opts: {
+		timeoutMs: number;
+		signal?: AbortSignal | undefined;
+		// lint-fix treats a non-zero exit as "diagnostics remain", not failure.
+		failOnExit?: boolean | undefined;
+	},
+	label: string,
+): Promise<FixedOutcome> {
+	return execFixed(program, args, cwd, opts).then((outcome) => {
+		if (outcome.timedOut)
+			throw new ToolError(
+				"TIMEOUT",
+				`${label} timed out after ${opts.timeoutMs} ms`,
+			);
+		if (opts.failOnExit !== false && outcome.code !== 0)
+			throw new ToolError(
+				"VALIDATION_FAILED",
+				`${label} failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
+			);
+		return outcome;
+	});
+}
 
 /**
  * Bounded fixed-argv runner for companion tools, modeled on src/git/exec.ts.

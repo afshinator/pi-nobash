@@ -10,7 +10,7 @@ import {
 	type ToolErrorDetails,
 } from "../../src/errors.ts";
 import { JS_PACKAGE_MANAGERS } from "../config.ts";
-import { execFixed } from "../process.ts";
+import { execFixedChecked } from "../process.ts";
 
 /**
  * P1-3/P1-4 js_dep_add / js_dep_remove. Installs/uninstalls BARE npm package
@@ -110,22 +110,13 @@ async function depAddImpl(
 		const packages = validateDepPackages(params.packages);
 		const dev = params.dev === true;
 		const cmd = lookupManager(manager, dev ? "addDev" : "add");
-		const outcome = await execFixed(
+		await execFixedChecked(
 			cmd.program,
 			[...cmd.args, ...packages],
 			cwd,
 			{ timeoutMs, signal },
+			"npm install",
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`npm install timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`npm install failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		return successResult(
 			`added ${packages.length} package${packages.length === 1 ? "" : "s"}${dev ? " (dev)" : ""}`,
 			{ packages, dev, manifestUpdated: true },
@@ -143,22 +134,13 @@ async function depRemoveImpl(
 	return runTool(async () => {
 		const packages = validateDepPackages(params.packages);
 		const cmd = lookupManager(manager, "remove");
-		const outcome = await execFixed(
+		await execFixedChecked(
 			cmd.program,
 			[...cmd.args, ...packages],
 			cwd,
 			{ timeoutMs, signal },
+			"npm uninstall",
 		);
-		if (outcome.timedOut)
-			throw new ToolError(
-				"TIMEOUT",
-				`npm uninstall timed out after ${timeoutMs} ms`,
-			);
-		if (outcome.code !== 0)
-			throw new ToolError(
-				"VALIDATION_FAILED",
-				`npm uninstall failed (exit ${outcome.code}): ${outcome.stderr || outcome.stdout}`,
-			);
 		return successResult(
 			`removed ${packages.length} package${packages.length === 1 ? "" : "s"}`,
 			{
