@@ -49,7 +49,7 @@ The historical investigation reported:
 
 **Data-integrity issue:** The category counts total **414**, while the session-level Bash total is **411**. It is unknown whether three calls were double-classified, incorrectly recorded, or omitted/misreported elsewhere. Do not adjust a category, present a precise coverage percentage based on category sums, or claim the inventory has been reconciled without raw transcript verification. The earlier percentages per category used 411 as a denominator and therefore should be considered approximate only.
 
-**Required follow-up for exact coverage metrics:** Obtain the original session/`tool-calls.jsonl` records; use stable call identifiers, assign one primary category per call (plus optional secondary tags), reconcile total to 411 or correct that total with evidence, and save a machine-readable manifest. Until then, these counts justify priorities only.
+**Required follow-up for exact coverage metrics:** Obtain the original session/`tool-calls.jsonl` records; use stable call identifiers, assign one primary category per call (plus optional secondary tags), reconcile total to 411 or correct that total with evidence, and save a machine-readable manifest. Until then, these counts justify priorities only. **Retired 2026-10-15:** the original transcripts were never retained (every local run artifact was searched; none matches the three sampled sessions), so this reconciliation is closed as not actioned — the counts stay approximate and must not be used as a precise coverage denominator.
 
 ### 2.3 Additional engineering-workflow evidence (recent session)
 
@@ -249,7 +249,7 @@ These are **test proposals**, not evidence that a working implementation already
 
 ## 10. Suggested investigation and development order
 
-**A1 — Reconcile the evidence.** Find original session transcripts, recompute per-call categories, resolve **411 versus 414**, and export the coverage manifest. If unavailable, preserve the documented uncertainty rather than adjusting numbers.
+**A1 — Reconcile the evidence.** Find original session transcripts, recompute per-call categories, resolve **411 versus 414**, and export the coverage manifest. If unavailable, preserve the documented uncertainty rather than adjusting numbers. **Retired 2026-10-15:** transcripts unavailable (searched every local run artifact; none matches the sampled sessions); the documented uncertainty is preserved by decision, so A1 is not actioned.
 
 **A2 — Classify the Python 109.** Extract each operation shape and output requirement. Identify a minimal reusable typed operator set and label irregular transforms `GAP`.
 
