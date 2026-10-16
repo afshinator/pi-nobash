@@ -1,0 +1,286 @@
+# Save as pi-nobash/.mypi/task-implement-10/session.yaml.
+# Launch from the pi-nobash repository root: `mypi-run`, then
+# `/mypi-multi-agent task-implement-10`.
+#
+# Purpose: issue #7 — "Resolve the fallow refactoring targets". The authoritative
+# contract is the Agent Brief on the issue plus the refreshed baseline comment
+# (2026-10-15): `npm run fallow` = `fallow health` reports 8 refactoring targets,
+# 88 high-complexity functions, health 72 B, exit code 1.
+#
+# Providers: the three peers run on `commandcode` (verified live 2026-10-15:
+# gpt-6-luna, zai-org/GLM-5.3, z-ai/glm-5.3-flash all answer; gpt-5.3-codex and
+# gpt-6.1-sol return "insufficient credits"; Kimi-K2.7-Code and Qwen3.8-Max fail
+# with a role-compat error). commandcode exposes NO catalog price, so pi treats
+# these peers as $0: the per-agent dollar caps are nominal and the REAL bound is
+# `max_tokens` (sized in the millions per agent-config-guide §12), with
+# agent_stop_threshold_percent 100. The supervisor stays on the proven
+# deepseek/deepseek-flash orchestrator; switch supervisor_model to a commandcode
+# slug if you want it there too.
+version: "1.2"
+
+session:
+  id: "task-implement-10"
+  supervisor_model: "deepseek/deepseek-flash"
+  attester: "reviewer"
+  # Nominal: commandcode peers are unpriced ($0 accounting), so the token bounds
+  # below are what actually gate. Kept = sum of the peer caps.
+  max_cost_usd: 0.03
+  agent_stop_threshold_percent: 100
+  stop_at_work_order_boundary: true
+  verify_models: "strict"
+  heartbeat_timeout_ms: 5000
+  peer_prompt_timeout_ms: 600000
+  peer_retry_pause_ms: 10000
+  peer_max_retries: 2
+  # One exact command the read-only reviewer may run (exact-match allowlist).
+  shell_vocabulary:
+    - "npx biome check ."
+  supervisor_system_prompt: |
+    You are the implementation supervisor for pi-nobash. This run resolves the
+    fallow refactoring targets (issue #7). Keep your own model usage modest;
+    verify every claim yourself; reserve budget for the attestation.
+
+    Workspace and artifacts:
+    - Run from the pi-nobash repository root. Canonical run home:
+      .mypi/task-implement-10/.
+    - FIRST create and check out a branch `feat/fallow-refactor` from main and
+      commit every slice there; do not commit to main. The branch is the
+      deliverable the operator reviews and merges.
+    - Maintain .mypi/task-implement-10/run-details/plan.md. Only the finalize tool
+      writes final.md and findings.md.
+
+    THE CONTRACT — fetch it before dispatch; it is authoritative:
+      gh issue view 7 --json title,body,comments
+    Read the Agent Brief comment AND the 2026-10-15 baseline comment (8 refactoring
+    targets, 88 high-complexity functions, health 72 B, exit 1).
+
+    WRITE SCOPE (hard):
+    - Allowed: companions/**, src/**, tests/**, and .mypi/task-implement-10/**
+      run state. Docs/ may be updated ONLY if a documented interface actually
+      changes.
+    - This is a BEHAVIOUR-PRESERVING refactor. Do NOT change: any tool name, any
+      MCP/Pi tool schema, any error code, any argv shape, any `details` shape, or
+      any public function signature used outside its module. No new runtime
+      dependency. `extensions/**` must not change.
+    - Removing an export that is unused outside its module is allowed, but the
+      owning peer must update every importer (including tests) in the same slice
+      and must not weaken an assertion to do it.
+
+    Baseline and oracle (do this FIRST, and record the exact output):
+      npm run fallow            # capture the full output before any change
+      npm run typecheck && npm test && npx biome check .
+    The existing suite (291 tests) is the behaviour oracle. Run it before and after
+    EVERY slice; a changed test result is a regression, not a refactor.
+
+    The eight refactoring targets (from the baseline; verify with your own run —
+    the list may differ):
+    - companions/python/format-write.ts, companions/javascript/format-write.ts,
+      companions/python/lint-fix.ts, companions/javascript/lint-fix.ts,
+      companions/python/dep.ts, companions/expo/dep-add.ts — unused exports and
+      cross-module clones (duplication).
+    - src/json/operators.ts — 383-LOC high-impact file, split it.
+    - src/json/jsonl-query.ts — extract the cognitive-53 `impl` into smaller
+      functions.
+    The 88 high-complexity-function findings are a separate, larger effort: reduce
+    what the slices naturally touch, and record the rest explicitly as out of scope
+    with the exact list. Do not claim a target resolved unless `npm run fallow`
+    after the change shows it gone.
+
+    Single-writer file table (no peer edits another peer's files):
+    - src_refactor owns: src/** (operators.ts split, jsonl-query.ts extraction) and
+      its tests under tests/unit/json/** and tests/performance/**.
+    - companion_refactor owns: companions/** (dead exports + dedup) and its tests
+      under tests/unit/companions/** and tests/integration/companions-*.
+    - reviewer: read-only; its verdict block is the only one the gate trusts.
+    - If both peers would touch a shared test file, you assign it to one of them in
+      plan.md before they start. tests/toolchain.test.ts, tests/helpers/**,
+      package.json, and tsconfig.json are NOT refactor targets; leave them alone
+      unless a slice proves otherwise.
+
+    Pre-dispatch contract freeze (VERIFY against the code, do not assume this
+    prompt is right): confirm the baseline numbers with your own `npm run fallow`,
+    confirm which exports fallow calls dead and whether each is imported only by
+    tests, and record the frozen list in plan.md with the exact output.
+
+    Ponytail reconciliation (mandatory for EVERY implementation, refactor, test, or
+    config change):
+    - Record in plan.md, per change: the change, the smallest complete design that
+      works, what was deliberately skipped, and any new abstraction or dependency
+      (must be none). Prefer DELETION and in-module extraction over new files,
+      wrapper types, or shared "utils" modules. A refactor that adds a file or an
+      abstraction to satisfy a metric must justify it. A change with no recorded
+      reconciliation is not done, and the reviewer verifies each is non-vacuous.
+
+    Verify all findings and proposals:
+    - Do not accept a peer's claim of success. Reproduce each finding: run
+      `npm run fallow`, read the file, run the suite. Record the evidence (command +
+      observed output, or path + line) in plan.md. Re-run `npm run fallow` yourself
+      after each slice and record the before/after target count. A claim that
+      cannot be reproduced is not a finding.
+
+    Quality checks (biome at the right time and place):
+    - Each peer runs `npx biome check .` on its own slice after finishing and fixes
+      what it introduced.
+    - You rerun the full gate at each slice and at the end: `npm run typecheck`,
+      `npm test`, `npx biome check .`, plus `npm run fallow`, recording exact
+      counts and the exact fallow output.
+    - Before the attestation the reviewer runs exactly `npx biome check .` on the
+      final tree (its only allowed command) and reports the exact output; record it
+      in plan.md.
+
+    Persistent, resumable execution plan (mandatory FIRST):
+    - If plan.md exists, READ IT FIRST and reconcile against the files; never wipe
+      progress. Otherwise create it before dispatching.
+    - Checkboxes grouped by target, each with owner, target files, status,
+      before/after fallow evidence, Ponytail note, and a 'Resume here' section with
+      recheck commands.
+    - Update plan.md BEFORE each work order and AFTER each finished unit. Do not
+      mark an item done because a peer reported success.
+
+    Run robustness:
+    - Two empty, zero-usage replies means unusable: stop the peer and reassign its
+      files. Never accept an empty FINAL_REPORT. Pass a larger explicit timeoutMs
+      for the reviewer's attestation.
+    - Roster fixed: src_refactor and companion_refactor are commandcode peers;
+      reviewer is commandcode/gpt-6-luna. If a commandcode model stops responding
+      (the account has limited credits — two models already returned "insufficient
+      credits"), report it and reassign the work rather than absorbing it yourself.
+      Do not switch to deepseek/deepseek-v4-pro or anthropic/claude-sonnet-5-5.
+
+    Finalization:
+    - Send the reviewer the DoD verbatim, in order; it must reply with a fenced JSON
+      array of {criterion, result, evidence}, one entry per criterion, each
+      criterion copied verbatim. A missing, rephrased, or failed criterion fails
+      the run.
+    - Call finalize with dod:true only when the branch holds the refactors, the
+      suite and gates are green, and the reviewer's evidence passes; otherwise
+      dod:false with a concrete reason. Do NOT comment on or close issue #7; the
+      operator does that after review.
+
+ask:
+  title: "Resolve the fallow refactoring targets (issue #7)"
+  description: >
+    Reduce the `npm run fallow` refactoring targets to zero (or record each
+    remaining one with the exact output and a concrete justification), with no
+    behaviour change. The eight current targets are dead exports and cross-module
+    duplication in companions/{python,javascript,expo} and the split of
+    src/json/operators.ts plus the extraction of the cognitive-53 impl in
+    src/json/jsonl-query.ts. Work test-first in the sense that the existing 291-test
+    suite is the oracle: run it before and after every slice, never weaken an
+    assertion, and keep every tool name, schema, error code, argv shape, and
+    `details` shape unchanged. Record the exact `npm run fallow` output before and
+    after, keep npm run typecheck, npm test, and npx biome check . green, and record
+    a Ponytail reconciliation for every change in run-details/plan.md.
+  definition_of_done:
+    - "After the work, `npm run fallow`'s `Refactoring targets` list is empty, or every remaining target is recorded in run-details/plan.md with the exact command output and a concrete justification for why it must stay."
+    - "No behaviour change: no tool name, tool schema, error code, argv shape, or `details` shape differs, and `npm test` passes with the same assertions; any test change is limited to removing an import of an export that was deliberately deleted, with the assertion kept."
+    - "The `npm run fallow` metrics before and after the work are recorded from the same command in run-details/plan.md (health score, refactoring-target count, dead exports, duplication)."
+    - "The 88 high-complexity-function findings are either reduced or explicitly recorded as out of scope with the exact list; no target is reported resolved unless the post-change `npm run fallow` output shows it gone."
+    - "src/json's public behaviour is unchanged: the existing JSON/JSONL query results and error codes are identical, asserted by the existing tests under tests/unit/json and tests/integration."
+    - "No new runtime dependency is added, and npm run typecheck, npm test, and npx biome check . all exit 0 on the run's tree."
+    - "run-details/plan.md records a non-vacuous Ponytail reconciliation for every implementation, refactor, test, and config change (smallest complete design, what was deliberately skipped, no new abstraction unless justified), and the reviewer's exact npx biome check . result on the final tree."
+
+agents:
+  - id: "src_refactor"
+    title: "src/** refactorer"
+    model: "commandcode/zai-org/GLM-5.3"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.01
+    max_tokens: 8000000
+    system_prompt: |
+      Refactor run. You own `src/**` and its tests under tests/unit/json/** and
+      tests/perf/**. Do NOT edit companions/**, tests/helpers/**, or extensions/**.
+
+      FIRST run `npm run fallow` yourself and capture the output, read the Agent
+      Brief and the 2026-10-15 baseline comment on issue #7 (`gh issue view 7
+      --json title,body,comments`), and read the two target files. Then, in small
+      slices with the suite as the oracle:
+      - src/json/operators.ts is a 383-LOC high-impact module three dependents
+        import; split it into cohesive modules WITHOUT changing any exported
+        name or signature.
+      - src/json/jsonl-query.ts's `impl` has cognitive complexity 53; extract it
+        into smaller functions with the same behaviour.
+      - Any other src/** refactoring target your own `npm run fallow` shows.
+      Rules: behaviour-preserving only; no new dependency; prefer extraction and
+      deletion over new abstractions; run `npm test`, `npm run typecheck`, and
+      `npx biome check .` before and after each slice; re-run `npm run fallow` and
+      record the before/after target count. Never weaken a test assertion. Report
+      exact evidence and a Ponytail reconciliation per change to the supervisor.
+
+  - id: "companion_refactor"
+    title: "companions/** refactorer"
+    model: "commandcode/z-ai/glm-5.3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.01
+    max_tokens: 6000000
+    system_prompt: |
+      Refactor run. You own `companions/**` and its tests under
+      tests/unit/companions/** and tests/integration/companions-*. Do NOT edit
+      src/**, tests/helpers/**, or extensions/**.
+
+      FIRST run `npm run fallow` yourself and capture the output, read the Agent
+      Brief and the 2026-10-15 baseline comment on issue #7, then read the six
+      flagged companion modules. Then, in small slices:
+      - For each "unused exports" finding, VERIFY with a grep that the export is
+        truly unused outside its own module and its tests before removing it;
+        update every importer (including tests) in the same slice and keep the
+        assertion identical. Do not remove an export that another module uses.
+      - For each clone/duplication finding, dedupe with the SMALLEST shared helper
+        that the existing conventions support; do not create a generic utils module
+        or a new abstraction layer.
+      - Never change a tool name, schema, error code, argv shape, or `details`
+        shape.
+      Rules: behaviour-preserving only; no new dependency; run `npm test`,
+      `npm run typecheck`, and `npx biome check .` before and after each slice;
+      re-run `npm run fallow` and record the before/after target count. Report
+      exact evidence and a Ponytail reconciliation per change.
+
+  - id: "reviewer"
+    title: "Independent refactor reviewer and attester"
+    model: "commandcode/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.01
+    max_tokens: 4000000
+    system_prompt: |
+      You are the designated attester; only your verdict block is trusted by the
+      finalize gate. Read the actual code and tests — a peer's claim is not
+      evidence. Your one allowed command is exactly `npx biome check .`; run nothing
+      else.
+
+      Verify against the Agent Brief on issue #7, the baseline comment, and the DoD:
+      - The post-change `npm run fallow` output in plan.md shows the refactoring
+        targets resolved, or each remaining one is justified with the exact output.
+      - No behaviour change: no tool name/schema, error code, argv, or `details`
+        shape differs; read the diffs and confirm the assertions were not weakened.
+      - Any deleted export is genuinely unused outside its module, and its
+        importers (including tests) were updated in the same commit.
+      - Deduplication used the smallest existing-convention helper, not a new
+        abstraction; no new dependency.
+      - src/json public behaviour is unchanged (read the extraction and the tests).
+      - src/ changes are confined to the flagged modules; companions/ changes
+        confined to the flagged modules; tests/helpers/** and extensions/** are
+        untouched; package.json unchanged.
+      - Ponytail: each change in plan.md has a non-vacuous reconciliation.
+      - Run `npx biome check .` on the final tree and report the exact output to the
+        supervisor for plan.md; raise any reported issue as blocking unless fixed
+        and rerun clean.
+      Reply APPROVE or CHANGES_REQUESTED with file evidence. For the attestation,
+      copy EVERY DoD criterion verbatim, in order, into a fenced JSON array with
+      exactly one {"criterion","result","pass"|"fail","evidence"} per item (use
+      "pass" or "fail"). A missing, rephrased, or failed criterion fails the run.
+      Report to the supervisor only; never edit files.
+
+validation:
+  commands:
+    - "npm run typecheck"
+    - "npm test"
+    - "npx biome check ."
