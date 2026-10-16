@@ -6,7 +6,8 @@
  * and writes a known package.json + lockfile (or pyproject.toml + uv.lock)
  * diff; assertions are byte-exact. The real-binary branch runs the REAL
  * npm/npx/uv only where the binary (and, for npm, the registry) is reachable,
- * and otherwise SKIPS with a printed reason.
+ * and otherwise SKIPS with a printed reason. The real-Expo bootstrap downloads
+ * an SDK (~331 MB), so it is additionally opt-in: set PI_NOBASH_LIVE_EXPO=1.
  */
 
 import assert from "node:assert/strict";
@@ -399,6 +400,13 @@ test("js_dep_add (REAL npm): registry probe, then real install of is-number with
 test("expo_dep_add (REAL expo): exact argv via the real CLI on an SDK project", {
 	timeout: 300_000,
 }, async (t) => {
+	// The real SDK bootstrap installs expo (~331 MB) into a temp project, so
+	// this branch is opt-in like the live provider call: PI_NOBASH_LIVE_EXPO=1.
+	if (process.env.PI_NOBASH_LIVE_EXPO !== "1") {
+		return t.skip(
+			"real-expo bootstrap is opt-in: set PI_NOBASH_LIVE_EXPO=1 (the default suite must stay light)",
+		);
+	}
 	// MUST NOT probe with `npx expo` — that would download expo from the
 	// registry just to run a skip check.
 	const localExpo =
