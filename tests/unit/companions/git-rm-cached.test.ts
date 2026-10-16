@@ -72,25 +72,26 @@ test("validateRmCachedPaths rejects leading-: pathspec magic (INVALID_ARGUMENT)"
 	}
 });
 
-test("validateRmCachedPaths: '.', -A/--force flags, and globs are CAPABILITY_GAP", () => {
+test("validateRmCachedPaths: '.', -A/--force flags are CAPABILITY_GAP", () => {
 	const cwd = mkdtempSync(path.join(tmpdir(), "rm-cached-cap-"));
 	try {
-		for (const p of [
-			".",
-			"./",
-			"-A",
-			"--all",
-			"--force",
-			"-f",
-			"*.ts",
-			"dir/?.txt",
-			"a[0]",
-		]) {
+		for (const p of [".", "./", "-A", "--all", "--force", "-f"]) {
 			assert.equal(
 				codeOf(() => validateRmCachedPaths([p], cwd)),
 				"CAPABILITY_GAP",
 				p,
 			);
+		}
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("validateRmCachedPaths: metacharacters are literal paths, not a capability gap (issue #10)", () => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "rm-cached-lit-"));
+	try {
+		for (const p of ["*.ts", "dir/?.txt", "a[0]"]) {
+			assert.deepEqual(validateRmCachedPaths([p], cwd), [p]);
 		}
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });

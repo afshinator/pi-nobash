@@ -26,10 +26,9 @@ export type FsDetails = { from: string; to: string };
 
 /**
  * Shared fs_copy/fs_move guard: exactly { from, to }, literal relative paths.
- * Extra keys (multi-path/recursive/overwrite/flag forms) are CAPABILITY_GAP;
- * glob metachars are refused because paths are literal — there is no glob
- * engine to fall back to. shortcut: literal names containing * ? [ are
- * rejected as glob requests; upgrade if a real literal-metachar path is needed.
+ * Extra keys (multi-path/recursive/overwrite/flag forms) are CAPABILITY_GAP.
+ * Metacharacters in a name (* ? [) are LITERAL, not globs: there is no glob
+ * engine here, so "a*b.txt" names one file (issue #10).
  */
 export function validateFsPair(
 	cwd: string,
@@ -50,12 +49,6 @@ export function validateFsPair(
 				"INVALID_ARGUMENT",
 				"from and to must be non-empty strings",
 			);
-		if (/[*?[]/.test(p))
-			throw new ToolError(
-				"CAPABILITY_GAP",
-				`glob expansion is not supported (paths are literal): ${p}`,
-				"glob expansion",
-			);
 	}
 	// Both paths pass the workspace policy before any filesystem write.
 	return {
@@ -70,6 +63,14 @@ export function statSourceOrNotFound(abs: string, display: string): Stats {
 	try {
 		return statSync(abs);
 	} catch {
+		// A metacharacter miss is not "not found": the caller may have meant a
+		// glob, and this tool never expands one (issue #10).
+		if (/[*?[]/.test(display))
+			throw new ToolError(
+				"CAPABILITY_GAP",
+				`no file literally named "${display}" exists; globs are not expanded (paths are literal) — pass an explicit path`,
+				"glob expansion",
+			);
 		throw new ToolError("NOT_FOUND", `source not found: ${display}`);
 	}
 }
@@ -138,7 +139,7 @@ export const copyTool: ToolDefinition<
 	name: "fs_copy",
 	label: "Copy file",
 	description:
-		"Copy one regular file to a workspace-relative destination that does not already exist. No recursion, no globs, no overwrite; both paths are workspace-bounded.",
+		"Copy one regular file to a workspace-relative destination that does not already exist. Paths are literal — a name containing * ? [ names that file (no glob expansion). No recursion, no overwrite.",
 	promptSnippet:
 		"Copy one workspace file to a new path (no overwrite, no recursion).",
 	annotations: { readOnlyHint: false, destructiveHint: true },

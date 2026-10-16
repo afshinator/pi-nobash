@@ -51,7 +51,7 @@ export const moveTool: ToolDefinition<
 	name: "fs_move",
 	label: "Move file or directory",
 	description:
-		"Rename one file or directory within the workspace (single in-place rename, no content copy). The destination must not already exist; no globs, no overwrite.",
+		"Rename one file or directory within the workspace (single in-place rename, no content copy). Paths are literal — a name containing * ? [ names that file (no glob expansion). The destination must not already exist; no overwrite.",
 	promptSnippet:
 		"Rename or move one workspace file or directory (no overwrite).",
 	annotations: { readOnlyHint: false, destructiveHint: true },

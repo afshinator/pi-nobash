@@ -359,6 +359,28 @@ test("git_rm_cached: untracks a tracked file, working-tree bytes unchanged", asy
 	}
 });
 
+test("git_rm_cached: untracks a tracked path whose name contains * ? [ (issue #10)", async () => {
+	const r = createTempGitRepo();
+	try {
+		writeFileSync(path.join(r.dir, "x[1].txt"), "bracket\n");
+		writeFileSync(path.join(r.dir, "a*b.txt"), "star\n");
+		gitIn(r.dir, ["add", "x[1].txt", "a*b.txt"]);
+		gitIn(r.dir, ["commit", "-m", "track metachar paths"]);
+		const result = (await unwrap(
+			executeRmCached({ paths: ["x[1].txt", "a*b.txt"] }, undefined, r.dir),
+		)) as { details: { removed: string[] } };
+		assert.deepEqual(result.details.removed.sort(), ["a*b.txt", "x[1].txt"]);
+		assert.equal(gitIn(r.dir, ["ls-files", "x[1].txt", "a*b.txt"]), "");
+		assert.equal(
+			readFileSync(path.join(r.dir, "x[1].txt"), "utf8"),
+			"bracket\n",
+		);
+		assert.equal(readFileSync(path.join(r.dir, "a*b.txt"), "utf8"), "star\n");
+	} finally {
+		r.cleanup();
+	}
+});
+
 test("git_rm_cached: a directory path removes its index subtree, files intact on disk", async () => {
 	const r = createTempGitRepo();
 	try {
@@ -407,16 +429,24 @@ test("git_rm_cached: path absent from the index is GIT_FAILED, index unchanged",
 			"GIT_FAILED",
 		);
 		assert.ok(gitIn(r.dir, ["ls-files", "README.md"]).includes("README.md"));
+		// A metacharacter path that is not in the index is a plain GIT_FAILED,
+		// not a capability gap (issue #10: paths are literal).
+		assert.equal(
+			await errCode(() =>
+				executeRmCached({ paths: ["nope*.txt"] }, undefined, r.dir),
+			),
+			"GIT_FAILED",
+		);
 	} finally {
 		r.cleanup();
 	}
 });
 
-test("git_rm_cached: CAPABILITY_GAP forms (-A, glob, force, extra key) reject with zero spawns", async () => {
+test("git_rm_cached: CAPABILITY_GAP forms (-A, --force, '.', extra key) reject with zero spawns", async () => {
 	const { recordSpawns } = await import("../helpers/companion-harness.ts");
 	const rec = recordSpawns();
 	try {
-		for (const p of ["-A", "--force", "*.ts", "."]) {
+		for (const p of ["-A", "--force", "."]) {
 			assert.equal(
 				await errCode(() =>
 					executeRmCached({ paths: [p] }, undefined, process.cwd()),

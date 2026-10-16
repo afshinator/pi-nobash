@@ -118,6 +118,9 @@ path against the session `cwd` and reject escapes and symlink traversal — pi-n
 prohibition. The one boundary worth keeping: no `git(args)` passthrough and no free-form flag
 string — one verb per tool, typed fields only.
 
+Paths are literal in all three tools: a filename containing `*`, `?`, or `[` is addressed
+literally — there is no glob expansion.
+
 Tool names are global to a session. The Git and file tools are shared by every stack, but the
 language-tooling tools are prefixed (`js_`, `py_`, `rust_`, `go_`) so a repo that loads two
 stack extensions does not register the same name twice.

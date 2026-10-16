@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
-import { copyTool, validateFsPair } from "../../../companions/files/copy.ts";
+import {
+	copyTool,
+	statSourceOrNotFound,
+	validateFsPair,
+} from "../../../companions/files/copy.ts";
 
 type AnyTool = {
 	parameters: { properties: Record<string, unknown> };
@@ -73,17 +79,32 @@ test("validateFsPair: any key other than from/to is CAPABILITY_GAP", () => {
 	}
 });
 
-test("validateFsPair: glob metachars are CAPABILITY_GAP 'glob expansion'", () => {
+test("validateFsPair: glob metachars are literal paths, not a capability gap (issue #10)", () => {
 	for (const p of ["a*.txt", "a?b", "a[b]", "dir/*"]) {
-		assert.equal(
-			code(() => validateFsPair(process.cwd(), { from: p, to: "b" })),
-			"CAPABILITY_GAP",
-		);
-		assert.equal(
-			capability(() => validateFsPair(process.cwd(), { from: "a", to: p })),
-			"glob expansion",
-		);
+		const r = validateFsPair(process.cwd(), { from: p, to: "b" });
+		assert.equal(r.from, p);
+		assert.equal(r.to, "b");
 	}
+});
+
+test("statSourceOrNotFound: a metachar miss is CAPABILITY_GAP 'glob expansion'; a plain miss is NOT_FOUND (issue #10)", () => {
+	const missing = path.join(tmpdir(), "pi-nobash-issue10-missing");
+	assert.equal(
+		code(() => statSourceOrNotFound(path.join(missing, "a*.txt"), "a*.txt")),
+		"CAPABILITY_GAP",
+	);
+	assert.equal(
+		capability(() =>
+			statSourceOrNotFound(path.join(missing, "a*.txt"), "a*.txt"),
+		),
+		"glob expansion",
+	);
+	assert.equal(
+		code(() =>
+			statSourceOrNotFound(path.join(missing, "plain.txt"), "plain.txt"),
+		),
+		"NOT_FOUND",
+	);
 });
 
 test("validateFsPair: NUL is INVALID_ARGUMENT, traversal/absolute are PATH_OUT_OF_SCOPE", () => {

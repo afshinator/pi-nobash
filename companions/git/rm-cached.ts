@@ -23,10 +23,11 @@ export function buildRmCachedArgv(paths: string[]): string[] {
 }
 
 /**
- * Literal workspace-relative tracked paths only. Flag-shaped, all-form, and
- * glob requests are CAPABILITY_GAP (the tool deliberately has no -A/--force/
+ * Literal workspace-relative tracked paths only. Flag-shaped and all-form
+ * requests are CAPABILITY_GAP (the tool deliberately has no -A/--force/
  * --ignore-unmatch); pathspec magic and unsafe paths are rejected before any
- * spawn. Symlink escapes are caught by resolving each existing path against cwd.
+ * spawn. Metacharacters (* ? [) are literal, not globs (issue #10). Symlink
+ * escapes are caught by resolving each existing path against cwd.
  */
 export function validateRmCachedPaths(paths: string[], cwd: string): string[] {
 	if (paths.length > MAX_GIT_PATHS)
@@ -46,12 +47,6 @@ export function validateRmCachedPaths(paths: string[], cwd: string): string[] {
 				"CAPABILITY_GAP",
 				`flags are not accepted (${p}); pass workspace-relative paths only`,
 				"flags",
-			);
-		if (/[*?[]/.test(p))
-			throw new ToolError(
-				"CAPABILITY_GAP",
-				`globs are not supported (paths are literal): ${p}`,
-				"glob expansion",
 			);
 		if (p.startsWith(":"))
 			throw new ToolError(
@@ -118,7 +113,7 @@ export const rmCachedTool: ToolDefinition<typeof rmCachedParams, unknown> = {
 	name: "git_rm_cached",
 	label: "Git rm --cached",
 	description:
-		"Remove explicit tracked paths from the Git index (untrack), leaving working-tree files untouched. Literal paths only: no globs, no all mode, no force.",
+		"Remove explicit tracked paths from the Git index (untrack), leaving working-tree files untouched. Paths are literal — a name containing * ? [ names that path (no glob expansion). No all mode, no force.",
 	promptSnippet:
 		"Untrack paths from the git index without deleting working-tree files.",
 	annotations: { readOnlyHint: false, destructiveHint: true },

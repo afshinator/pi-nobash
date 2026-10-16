@@ -110,6 +110,46 @@ test("fs_copy: exact tree — only the destination is added; source and unrelate
 	}
 });
 
+test("fs_copy/fs_move: literal filenames containing * ? [ are addressable (issue #10)", async () => {
+	const ws = workspace();
+	file(ws, "a*b.txt", "star\n");
+	file(ws, "q?.txt", "question\n");
+	mkdirSync(path.join(ws, "dst"));
+	const recorder = recordSpawns();
+	try {
+		const c = (await executeCopy(
+			{ from: "a*b.txt", to: "dst/star.txt" },
+			ws,
+		)) as { details: { from: string; to: string } };
+		assert.deepEqual(c.details, { from: "a*b.txt", to: "dst/star.txt" });
+		assert.equal(bytes(ws, "dst/star.txt"), "star\n");
+
+		const m = (await executeMove(
+			{ from: "q?.txt", to: "renamed.txt" },
+			ws,
+		)) as { details: { from: string; to: string } };
+		assert.deepEqual(m.details, { from: "q?.txt", to: "renamed.txt" });
+		assert.equal(bytes(ws, "renamed.txt"), "question\n");
+		assert.equal(recorder.spawns.length, 0);
+	} finally {
+		recorder.restore();
+	}
+});
+
+test("fs_copy: a metachar miss is CAPABILITY_GAP 'glob expansion'; a plain miss is NOT_FOUND (issue #10)", async () => {
+	const ws = workspace();
+	assert.deepEqual(
+		await errCode(() => executeCopy({ from: "*.ts", to: "out.ts" }, ws)),
+		{ code: "CAPABILITY_GAP", capability: "glob expansion" },
+	);
+	assert.deepEqual(
+		await errCode(() =>
+			executeCopy({ from: "missing.txt", to: "out.txt" }, ws),
+		),
+		{ code: "NOT_FOUND", capability: undefined },
+	);
+});
+
 test("fs_copy: directory source is CAPABILITY_GAP 'recursive copy', nothing written", async () => {
 	const ws = workspace();
 	file(ws, "dir/inner.txt", "x\n");
