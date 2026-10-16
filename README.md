@@ -15,7 +15,7 @@ replacement tool never accepts arbitrary commands, executables, argv, scripts, o
 interpreter input.
 
 - **Target runtime:** `@earendil-works/pi-coding-agent` 1.1.0
-- **Package version:** 2.3.0
+- **Package version:** 2.4.0
 - **Runtime dependencies:** none (Pi supplies `@earendil-works/pi-coding-agent` and `typebox`)
 - **No build step:** Pi loads the TypeScript extension through `jiti`
 

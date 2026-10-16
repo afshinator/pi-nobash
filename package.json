@@ -1,6 +1,6 @@
 {
 	"name": "pi-nobash",
-	"version": "2.3.0",
+	"version": "2.4.0",
 	"description": "Opt-in Pi package to take bash away from the agent, allow configuirable sensible alternatives.",
 	"type": "module",
 	"engines": {

@@ -1,7 +1,7 @@
 /** Shared constants. No model-facing configuration lives here (spec §8). */
 
 export const PACKAGE_NAME = "pi-nobash";
-export const PACKAGE_VERSION = "2.3.0";
+export const PACKAGE_VERSION = "2.4.0";
 export const TARGET_PI = "@earendil-works/pi-coding-agent 1.1.0";
 
 export const BASH_TOOL_NAME = "bash";
