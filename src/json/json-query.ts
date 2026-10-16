@@ -1,29 +1,26 @@
 import { readFileSync } from "node:fs";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import {
-	DEFAULT_STRUCTURED_ROWS,
-	MAX_JSON_INPUT_BYTES,
-	MAX_RESULT_TEXT_BYTES,
-} from "../constants.ts";
+import { DEFAULT_STRUCTURED_ROWS, MAX_JSON_INPUT_BYTES } from "../constants.ts";
 import {
 	type JsonValue,
-	runTool,
-	successResult,
+	runTruncatingTool,
 	ToolError,
 	type ToolErrorDetails,
-	truncateUtf8,
 } from "../errors.ts";
 import { validateWorkspaceFile } from "../path-policy.ts";
+import { aggregateRecords } from "./aggregates.ts";
+import { getPath } from "./paths.ts";
 import {
-	aggregateRecords,
 	assertSafeNumbers,
-	getPath,
 	matchesAll,
+	validatePredicates,
+} from "./predicates.ts";
+import {
+	limitResults,
 	projectRecord,
 	sortRows,
-	validatePredicates,
 	validateQueryShape,
-} from "./operators.ts";
+} from "./rows.ts";
 import type { JsonQueryInput } from "./schemas.ts";
 
 export type JsonQueryDetails = {
@@ -101,12 +98,16 @@ async function impl(
 	}
 
 	const limit = params.limit ?? DEFAULT_STRUCTURED_ROWS;
-	const truncated = results.length > limit;
+	const {
+		returned,
+		truncated,
+		results: limited,
+	} = limitResults(results, limit);
 	return {
 		matched: matched.length,
-		returned: Math.min(results.length, limit),
+		returned,
 		truncated,
-		results: results.slice(0, limit),
+		results: limited,
 	};
 }
 
@@ -114,13 +115,9 @@ export function runJsonQuery(
 	params: JsonQueryInput,
 	cwd: string,
 ): Promise<Body> {
-	return runTool(async () => {
-		const details = await impl(params, cwd);
-		const { text: body, truncated } = truncateUtf8(
-			JSON.stringify(details.results),
-			MAX_RESULT_TEXT_BYTES,
-		);
-		const text = `${details.returned} of ${details.matched} matched${details.truncated || truncated ? " [truncated]" : ""}\n${body}`;
-		return successResult(text, details, details);
-	});
+	return runTruncatingTool(
+		() => impl(params, cwd),
+		(details, truncated) =>
+			`${details.returned} of ${details.matched} matched${details.truncated || truncated ? " [truncated]" : ""}`,
+	);
 }

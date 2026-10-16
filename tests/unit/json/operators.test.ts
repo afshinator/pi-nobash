@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type JsonValue, ToolError } from "../../../src/errors.ts";
+import { aggregateRecords } from "../../../src/json/aggregates.ts";
+import { getPath } from "../../../src/json/paths.ts";
 import {
-	aggregateRecords,
 	assertSafeNumbers,
-	compareScalars,
 	evaluatePredicate,
-	getPath,
-	validateQueryShape,
-} from "../../../src/json/operators.ts";
+} from "../../../src/json/predicates.ts";
+import { compareScalars, validateQueryShape } from "../../../src/json/rows.ts";
 import type {
 	Aggregate,
 	Predicate,

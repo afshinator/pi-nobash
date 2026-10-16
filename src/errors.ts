@@ -1,4 +1,5 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { MAX_RESULT_TEXT_BYTES } from "./constants.ts";
 
 /** JSON-compatible value, shared by JSON/JSONL/Git structured outputs. */
 export type JsonValue =
@@ -102,6 +103,28 @@ export async function runTool<T>(
 	} catch (err) {
 		return toToolErrorResult(err);
 	}
+}
+
+/**
+ * Shared runner for structured query tools (JSON/JSONL): serializes the result
+ * rows within the model-facing text byte budget and wraps them in the envelope.
+ */
+export function runTruncatingTool<T extends { results: JsonValue[] }>(
+	run: () => Promise<T>,
+	summary: (details: T, truncated: boolean) => string,
+): Promise<AgentToolResult<T | ToolErrorDetails>> {
+	return runTool(async () => {
+		const details = await run();
+		const { text: body, truncated } = truncateUtf8(
+			JSON.stringify(details.results),
+			MAX_RESULT_TEXT_BYTES,
+		);
+		return successResult(
+			`${summary(details, truncated)}\n${body}`,
+			details,
+			details,
+		);
+	});
 }
 
 /** Bounds text to `maxBytes` UTF-8 bytes without splitting surrogate pairs. */
