@@ -88,7 +88,7 @@ async function formatWriteImpl(
 			`${formatter} format`,
 		);
 		// Conservative details: exit 0 means every validated path was formatted.
-		// shortcut: details.formatted echoes the input paths, not ruff output.
+		// shortcut: details.formatted echoes the input paths, not ruff output, upgrade when per-file formatter detail is needed
 		return successResult(`formatted ${resolved.length} file(s)`, {
 			formatted: [...params.paths],
 			truncated: outcome.truncated,
