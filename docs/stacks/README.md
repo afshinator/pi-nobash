@@ -103,12 +103,12 @@ file. A request to stage everything returns `CAPABILITY_GAP`.
 Push is its own tool because it is different in kind, not degree: it is the only operation
 whose effect lands on a shared remote and is not undone by a local reset.
 
-**File lifecycle** (`my-fs-tools.ts`):
+**File lifecycle** ([`companions/files/`](../../companions/files/)):
 
 | Tool | Input | Effect | Status |
 |---|---|---|---|
-| `fs_copy` | `{ from, to }` | copy one path inside the workspace | proposed |
-| `fs_move` | `{ from, to }` | move or rename one path inside the workspace | proposed |
+| [`fs_copy`](../../companions/files/copy.ts) | `{ from, to }` | copy one regular file inside the workspace | implemented |
+| [`fs_move`](../../companions/files/move.ts) | `{ from, to }` | move or rename one path inside the workspace | implemented |
 | `fs_delete` | `{ path }` | delete one explicit path | proposed |
 
 Register each as its own tool so an agent gets exactly the operations it needs. Resolve every
@@ -122,7 +122,7 @@ Tool names are global to a session. The Git and file tools are shared by every s
 language-tooling tools are prefixed (`js_`, `py_`, `rust_`, `go_`) so a repo that loads two
 stack extensions does not register the same name twice.
 
-`docs/replacing-bash.md` has the full `fs_move` implementation to copy.
+`fs_copy` and `fs_move` are implemented in [`companions/files/`](../../companions/files/); `docs/replacing-bash.md` shows the shape they follow.
 
 ## Checks template
 

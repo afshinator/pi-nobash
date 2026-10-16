@@ -8,13 +8,14 @@ changes.
 `pi-nobash` registers none of them — the package's `pi.extensions` manifest has a single
 entry — and every companion tool registers with `defaultActive: false`.
 
-**Status:** the P0 companions are implemented and shipped in this directory —
-`process.ts` (the bounded fixed-argv runner), `config.ts` (developer-configured
-backend selection), the four Git mutation tools, `js_format_write`, and
-`py_format_write` — per
-[the companions implementation plan](https://github.com/afshinator/pi-nobash/blob/main/docs/plans/pi-nobash-companions-implementation-plan.md).
-The P1 tools (lint fixes, dependency changes, `expo_dep_add`) are planned, not
-written; the layout below marks them as such.
+**Status:** the P0 and P1 companions are implemented and shipped in this directory —
+`process.ts` (the bounded fixed-argv runner), `config.ts` (developer-configured backend
+selection), the Git tools (`git_create_branch`, `git_add`, `git_commit`, `git_push`,
+`git_rm_cached`), the file-lifecycle tools (`fs_copy`, `fs_move`), the formatters
+(`js_format_write`, `py_format_write`), the safe lint fixes (`js_lint_fix`, `py_lint_fix`),
+the dependency tools (`js_dep_add`, `js_dep_remove`, `py_dep_add`, `py_dep_remove`), and
+`expo_dep_add`. Planned, not written: `fs_delete` and the Rust/Go tools. The layout below
+marks what is shipped.
 
 **Where the guide lives.** [docs/stacks](https://github.com/afshinator/pi-nobash/blob/main/docs/stacks/README.md)
 is the per-stack guide — which tools to select, which checks to configure, and which companion
@@ -45,10 +46,11 @@ companions/
   README.md      this file
   process.ts     execFixed — bounded fixed-argv runner                     (shipped)
   config.ts      .pi/pi-nobash-companions.json loader + enum->argv builders (shipped)
-  git/           git_create_branch, git_add, git_commit, git_push            (shipped)
-  javascript/    js_format_write (shipped); js_lint_fix, js_dep_add, js_dep_remove (planned, P1)
-  python/        py_format_write (shipped); py_lint_fix, py_dep_add, py_dep_remove (planned, P1)
-  expo/          expo_dep_add                                                (planned, P1)
+  git/           git_create_branch, git_add, git_commit, git_push, git_rm_cached (shipped)
+  files/         fs_copy, fs_move                                          (shipped)
+  javascript/    js_format_write, js_lint_fix, js_dep_add, js_dep_remove   (shipped)
+  python/        py_format_write, py_lint_fix, py_dep_add, py_dep_remove   (shipped)
+  expo/          expo_dep_add                                             (shipped)
 ```
 
 ## Rules every companion tool follows

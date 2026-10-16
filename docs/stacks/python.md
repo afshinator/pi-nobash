@@ -24,7 +24,8 @@ What each tool is:
 | `git_status` `git_diff` `git_log` `git_show` | pi-nobash | no | inspect history and the working tree | implemented |
 | `run_validation` | pi-nobash | no | run the checks in §2 | implemented |
 | [`git_create_branch`](../../companions/git/create-branch.ts) [`git_add`](../../companions/git/add.ts) [`git_commit`](../../companions/git/commit.ts) [`git_push`](../../companions/git/push.ts) | your extension | yes | Git mutations | implemented |
-| `fs_copy` `fs_move` `fs_delete` | your extension | yes | file lifecycle | proposed |
+| [`fs_copy`](../../companions/files/copy.ts) [`fs_move`](../../companions/files/move.ts) | your extension | yes | file lifecycle | implemented |
+| `fs_delete` | your extension | yes | delete one explicit path | proposed |
 | [`py_format_write`](../../companions/python/format-write.ts) | your extension | yes | formatter write mode | implemented |
 | `py_lint_fix` | your extension | yes | safe lint fixes | proposed |
 | `py_dep_add` `py_dep_remove` | your extension | yes | dependency changes | proposed |
